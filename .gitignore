@@ -1,0 +1,13 @@
+# Project-owned Selective Intelligence build state
+.selective-intelligence/
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local release outputs
+dist/
+build/
+*.zip
+*.tar.gz

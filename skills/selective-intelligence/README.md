@@ -6,7 +6,7 @@ Published by [Platynum Standard](https://github.com/Platynum-Standard). The cano
 
 ## Start without installing anything
 
-The hardest part of vibe coding is often the blank chat at the beginning. Use [JUMPSTART.md](skills/selective-intelligence/JUMPSTART.md) to remove that cold start:
+The hardest part of vibe coding is often the blank chat at the beginning. Use [JUMPSTART.md](JUMPSTART.md) to remove that cold start:
 
 1. Download or copy `JUMPSTART.md`.
 2. Upload or paste it into ChatGPT with whatever you have—an idea, URL, file, note, screenshot, or existing repository. If you have nothing else yet, JumpStart asks one plain-language outcome question.
@@ -67,7 +67,7 @@ Use the canonical repository or versioned release archive as the source for ever
 
 Filesystem access is required for repository and Start modes. Python 3.10 or newer runs the dependency-free validators. Live web evidence needs browser or network access. When a capability is unavailable, the skill narrows the blocker and preserves the same truth standard.
 
-The current deterministic release-candidate evidence is recorded in [evals/results-0.2.0.json](skills/selective-intelligence/evals/results-0.2.0.json). The prompt cases in `evals/evals.json` are declarations until a reproducible model/client runner records evidence. Public release remains blocked until that behavioral evaluation exists. The contract is model-neutral; equivalence across untested models is not claimed as proof.
+The current deterministic release-candidate evidence is recorded in [evals/results-0.2.0.json](evals/results-0.2.0.json). The prompt cases in `evals/evals.json` are declarations until a reproducible model/client runner records evidence. Public release remains blocked until that behavioral evaluation exists. The contract is model-neutral; equivalence across untested models is not claimed as proof.
 
 ### Update and uninstall
 
@@ -87,8 +87,8 @@ Assume anything previously public may already have been copied. Changing visibil
 
 ## Free forever
 
-The complete skill, validators, schemas, references, templates, evals, and updates are released under [CC0 1.0 Universal](skills/selective-intelligence/LICENSE). Use, copy, modify, redistribute, or commercialize them without asking permission.
+The complete skill, validators, schemas, references, templates, evals, and updates are released under [CC0 1.0 Universal](LICENSE). Use, copy, modify, redistribute, or commercialize them without asking permission.
 
 An optional Sway support link will be added only after the owner supplies the exact destination. Donations will never unlock features, change output quality, or become required for installation or updates.
 
-See [distribution and discoverability](skills/selective-intelligence/references/distribution-and-discoverability.md) for the public repository, release, integrity, and support-link contract.
+See [distribution and discoverability](references/distribution-and-discoverability.md) for the public repository, release, integrity, and support-link contract.

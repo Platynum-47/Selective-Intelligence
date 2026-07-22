@@ -1,0 +1,11 @@
+interface:
+  display_name: "Selective Intelligence"
+  short_description: "JumpStart, council, resume, and realign systems"
+  default_prompt: "Use $selective-intelligence to JumpStart, resume, realign, or complete this work by locking actual intent, running the smallest sufficient Guided Council, and verifying the authorized outcome with evidence."
+policy:
+  products:
+  - "chatgpt"
+  - "codex"
+  - "api"
+  - "atlas"
+  allow_implicit_invocation: true
