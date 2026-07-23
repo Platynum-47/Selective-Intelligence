@@ -1,0 +1,29 @@
+{
+  "runId": "2026-07-23",
+  "legend": "KEEP=directly supports confirmed intent; ADAPT=useful but needs contract/architecture change; QUARANTINE=possibly useful, not yet justified; REMOVE=conflicts with confirmed intent; UNKNOWN=insufficient evidence. No sunk-cost protection.",
+  "items": [
+    {"path": "SI references/first-checkpoint.md", "class": "KEEP", "why": "Codifies I018/I019 (gate before understanding, info-sufficiency)."},
+    {"path": "SI references/non-developer-surface.md", "class": "KEEP", "why": "Codifies I003/I014/I017 (non-dev surface, minimal human layer, 1-2-3 presentation)."},
+    {"path": "SI references/time-awareness.md", "class": "KEEP", "why": "Codifies I011."},
+    {"path": "SI references/friction-ladder.md", "class": "KEEP", "why": "Codifies I001; Tier-1-default correct."},
+    {"path": "SI references/prompt-queue.md", "class": "ADAPT", "why": "Queue-as-inbox is correct (I025) but must sit under authoritative intent/fact/acceptance/dependency ledgers, which do not exist yet."},
+    {"path": "SI scripts/capabilities.py", "class": "KEEP", "why": "Directly implements I022/I023 capability-first; verified real report (F005/F006)."},
+    {"path": "SI scripts/build_engine.py", "class": "ADAPT", "why": "Facade over LaneSession (good, I021) but BACKEND=anthropic default; must consult resolver + invoke resolved adapter (I023)."},
+    {"path": "SI scripts/lane_session.py", "class": "QUARANTINE", "why": "Session-authority fix is sound (I021) but the lane model is a hypothesis (I025/C3), not first-executable-justified."},
+    {"path": "SI scripts/lane_registry.py + schemas/lane.schema.json + lanes/*", "class": "QUARANTINE", "why": "Lane infra is a hypothesis (I025); may remain/change/be removed after recovery."},
+    {"path": "SI subskills/si-planner, si-worker, si-objector, si-aligner, si-verifier, si-intake, si-queue-manager", "class": "KEEP", "why": "Canonical role prompts; reusable regardless of kernel shape."},
+    {"path": "SI scripts/eval_runner.py + evals (acceptance-benchmark, first-checkpoint, non-developer-surface cases)", "class": "KEEP", "why": "Encodes I013/I016 acceptance + drift-as-eval."},
+    {"path": "SI scripts/prompt_queue.py", "class": "ADAPT", "why": "Inbox mechanics fine; must become a derived-queue feeder, not project truth (I025)."},
+    {"path": "SI scripts/council.py, feedback.py, release.py, start_pack.py, eval.py", "class": "KEEP", "why": "Pre-existing SI tooling; unaffected."},
+    {"path": "Platynum server.js gateway routes (/api/model/plan,/build)", "class": "ADAPT", "why": "Correct as thin gateway (I024) but must route through capability resolver, drop key-gate framing (I023)."},
+    {"path": "Platynum server.js pairing routes (T4)", "class": "QUARANTINE", "why": "Useful capability lane but not first-executable-justified (I010 defers)."},
+    {"path": "Platynum server.js deploy webhook", "class": "QUARANTINE", "why": "Deploy capability; downstream."},
+    {"path": "Platynum OAuth broker (github one-click) + server.js oauth routes", "class": "QUARANTINE", "why": "Solves I003 dev-wall well but is a downstream connector, not the first executable."},
+    {"path": "Platynum src/BuildPanel.tsx + build.ts", "class": "ADAPT", "why": "Two-step plan/build UI is aligned (I017) but 'enter key / not ready' framing must become capability-state (I023)."},
+    {"path": "Platynum src/GitHubPanel.tsx + github.ts", "class": "QUARANTINE", "why": "Connector UI; downstream of first executable."},
+    {"path": "Platynum src/PairPanel.tsx + pair.ts", "class": "QUARANTINE", "why": "Paired-mode UI (I010 last feature); deferred."},
+    {"path": "Platynum src/Editor.tsx, workspace.ts, handoff.ts, styles.css (T0 editor)", "class": "QUARANTINE", "why": "Editor surface useful (I004/I009) but downstream; keep for the eventual control-plane."},
+    {"path": "Platynum CHECKPOINT_SYSTEM/BUILD_SYSTEM (inert strings in server.js)", "class": "REMOVE", "why": "Platynum-local planner/builder prompts conflict with SI-authoritative intent (I024); already inert."},
+    {"path": "SI/Platynum 'test' backend path", "class": "KEEP", "why": "Correctly test-only (I022); do not present as production."}
+  ]
+}

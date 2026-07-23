@@ -1,0 +1,23 @@
+{
+  "runId": "2026-07-23",
+  "status": "provisional — requires Thomas's acceptance before implementation resumes",
+  "derivedFrom": ["I013", "I014", "I018", "I019", "I023", "I024", "I025"],
+  "statement": "Selective Intelligence turns minimal user intent into a complete, evidence-grounded product by understanding intent FIRST, discovering every machine-available fact, asking only what it cannot safely discover, and executing every runnable step with the capabilities the user already has — continuing until the product is verified-complete or genuine human action is the only remaining blocker. Platynum-47 is the user-facing product and control environment for this process; SI is the intelligence and execution system underneath it. They are one product; drift in either is an SI failure.",
+  "invariants": [
+    "Authority order: explicit user intent > later explicit corrections > confirmed facts > accepted acceptance criteria > architecture > existing code. Code is evidence of current state, never of desired state.",
+    "Intent gate: no planning/implementation begins until confirmed intent, derived interpretation, reversible assumptions, unresolved contradictions, and missing human decisions are distinguished (I018/I019).",
+    "Capability-first: SI discovers and uses whatever the user already has authenticated; no global model-key requirement; a missing capability blocks only the dependent lane (I023).",
+    "Minimal human layer: user only answers material questions, takes alignment/authority steps, connects their own sources, or performs human-only actions (I014).",
+    "A new instruction triggers intent reconciliation + contradiction detection + impact analysis + invalidation + queue regeneration — not a task append (I025).",
+    "The prompt queue is an inbox; intent/fact/acceptance/dependency ledgers are authoritative; execution queues are derived (I025).",
+    "Completion requires evidence against accepted product acceptance criteria; code existing/compiling/committing is not completion (I025).",
+    "Plain, numbered, non-developer presentation of plans; no jargon on user surfaces (I003/I017).",
+    "Every durable work product is timestamped and time-aware (I011)."
+  ],
+  "openForThomas": [
+    "Is the lane-based kernel (I020) the confirmed architecture for the FIRST executable, or infrastructure to defer until after the first executable is proven? (C3)",
+    "What single, concrete first-executable target proves the north star — e.g., a specific small Platynum feature built through SI end-to-end?",
+    "Which repo/owner is canonical for the unified product (SI under Platynum-Standard; Platynum under infotradescout) — and should they be consolidated?",
+    "Where do the merlin/AI-Council output guidelines live (I002/F014)?"
+  ]
+}

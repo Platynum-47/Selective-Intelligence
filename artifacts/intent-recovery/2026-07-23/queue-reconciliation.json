@@ -1,0 +1,31 @@
+{
+  "runId": "2026-07-23",
+  "principle": "The prompt queue is an inbox only. Authoritative state = Intent + Fact + Decision + Assumption ledgers + Acceptance Contract + Capability Inventory + Dependency Graph. Execution queues are DERIVED from those. A new instruction runs reconciliation, not append.",
+  "authoritativeRecords": ["Intent Ledger", "Fact Ledger", "Decision Ledger", "Assumption Ledger", "Acceptance Contract", "Capability Inventory", "Dependency Graph", "Artifact/Evidence Ledger"],
+  "derivedQueues": ["intake", "discovery", "decision", "ready", "running", "verification", "repair", "human_action", "integration", "completed", "invalidated"],
+  "reconciliationOnNewInstruction": ["1 intent reconciliation", "2 contradiction detection", "3 impact analysis", "4 affected-task invalidation", "5 dependency recalculation", "6 queue regeneration", "7 preserve unaffected verified work"],
+  "queueForensics": {
+    "howItemsEntered": "Each chat correction became a build task directly.",
+    "linkedToIntent": "Loosely; no explicit acceptance-criterion linkage.",
+    "dependenciesRepresented": "Only inside lane_session (late); not at the project/queue level.",
+    "blockingFactsRepresented": "No — implementation started before fact gates.",
+    "invalidatedOnIntentChange": "No — superseded interpretations were left as committed slices.",
+    "latestPromptOverrodeGlobalIntent": "Repeatedly — the newest correction drove a local architecture change.",
+    "humanBlockedOveruse": "Model-key was treated as a near-global blocker before I023 corrected it.",
+    "completionRevalidated": "Infra slices verified; product acceptance never validated."
+  },
+  "reconciledQueueNow": {
+    "intake": ["I025 STOP + audit (this pass)"],
+    "discovery": ["locate merlin/AI-Council output guideline (F014)", "confirm canonical repo/owner", "confirm whether lane kernel is the first-executable architecture (C3)"],
+    "decision": ["Thomas: accept/adjust provisional north-star + first-executable (north-star-contract.json openForThomas)"],
+    "ready": [],
+    "running": [],
+    "verification": [],
+    "repair": [],
+    "human_action": ["Thomas accepts north-star + first-executable target", "install/authenticate a reasoning adapter for the real speedrun (F006) OR choose managed path"],
+    "integration": [],
+    "completed": ["session-authority unification (0d10cd2) — verified", "capability resolver reporting (bd5d097) — verified", "this intent-recovery audit"],
+    "invalidated": ["'model key is a global prerequisite' framing (superseded by I023)", "'Platynum is a separate builder' framing (superseded by I024)", "'build infrastructure before proving the first executable' approach (superseded by I025)"]
+  },
+  "note": "No new implementation queue items are marked ready. Per I025, implementation does not resume until the north-star + first-executable are accepted by Thomas."
+}
