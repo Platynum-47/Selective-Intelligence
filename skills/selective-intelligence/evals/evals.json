@@ -17,6 +17,13 @@
       "must_not": ["ship a trimmed single-thread MVP as the finished product", "cut scope to fit the deadline and call it complete", "ask the user to supply scope the seed implies", "start a slice before the information to perform all of it is in hand", "write application code before the checkpoint exists"]
     },
     {
+      "id": "acceptance-invent-si-with-user-layer",
+      "kind": "positive_trigger",
+      "prompt": "Invent Selective Intelligence with a user layer.",
+      "must": ["emit the full-scope checkpoint as the first deliverable, before any partial output", "deliver the complete doctrine (first-checkpoint, non-developer surface, time-awareness, friction ladder with Tier-1 default, output economy, enforcement model)", "deliver both layers: the SI engine/skill package and a non-developer user layer that runs it", "make the user layer one-click and vibe-coder-grade, never a developer wall", "reach information sufficiency and canonical reuse before building; sequence the system into tiers with proof", "produce it uncorrected — correction-rounds-to-correct-deliverable approaches zero"],
+      "must_not": ["require the user to drag the scope out over many corrections", "ship a trimmed editor, a token wall, or a plan-only stub as the deliverable", "start building before the checkpoint is complete and information-sufficient", "present prose gates as if they were already enforced"]
+    },
+    {
       "id": "non-developer-surface-connector",
       "kind": "positive_trigger",
       "prompt": "I'm not a coder. Build me an app I can run from my phone that saves to my GitHub.",

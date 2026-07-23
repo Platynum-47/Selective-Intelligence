@@ -291,6 +291,7 @@ Spend tokens on building, not narration. Emit the minimum response that fully se
 - Prefer the minimum sufficient output; conserve tokens for the build without dropping proof, blockers, or required approvals.
 - Timestamp durable work in UTC (ISO 8601) and stay aware of time passing — track elapsed time and durations, convert relative dates to absolute, flag stale facts, and never fabricate or backdate a time. Read [references/time-awareness.md](references/time-awareness.md).
 - Build for a vibe coder, not a developer: never hand the user a token, key, scope, env var, CLI command, or config file; hide all mechanics behind one-click flows. A capability that cannot be delivered without them is an architecture gap to fix, never a step for the user. Read [references/non-developer-surface.md](references/non-developer-surface.md).
+- The human layer is minimal: the user should only ever (1) answer a genuinely material question, (2) take the alignment/authority steps the AI cannot self-grant, (3) connect their own third-party sources in one click, or (4) take an action only a human can. Everything else — recovering intent, planning, building, verifying, fixing, reconciling — is the AI's job. If the user is doing anything else, the surface failed to absorb the work.
 
 ## Representative requests
 

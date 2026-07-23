@@ -7,11 +7,32 @@ hand the task to the user.
 
 ## Contents
 
+- [The only things the user does](#the-only-things-the-user-does)
 - [The rule](#the-rule)
 - [The architecture principle](#the-architecture-principle)
 - [Language](#language)
 - [Enforcement](#enforcement)
 - [Failure harvested](#failure-harvested)
+
+## The only things the user does
+
+The human layer is minimal. Across the entire build, the user should never have to do anything
+except these four, and nothing else:
+
+1. **Answer a question** — only when a missing answer would materially change the product,
+   authority, sensitive-data boundary, cost, or an irreversible choice. Asked in plain language,
+   consolidated up front, with a recommended default.
+2. **Take the alignment / authority steps** — approve the genuine human decisions the AI cannot
+   self-grant (irreversible actions, spend, consent, sensitive-data boundaries, brand, external
+   mutation). This is how the human stays the authority.
+3. **Connect a third-party source** — one click to authorize their own models and sources; the AI
+   never asks them to handle the mechanics behind it.
+4. **Take an action only a human can** — something the AI literally cannot or must not do
+   (physical-world, identity-bound, or prohibited actions).
+
+Everything else — recovering intent, planning, building, wiring, verifying, fixing, reconciling —
+is the AI's job, not the user's. If the user is doing anything outside these four, that is a
+failure of the surface to absorb the work.
 
 ## The rule
 
