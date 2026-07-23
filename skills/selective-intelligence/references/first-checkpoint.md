@@ -45,6 +45,15 @@ recovered.
 6. **Authority split** — the genuine human decisions (irreversible actions, consequential cost,
    sensitive-data boundaries, brand, external mutation) separated from everything the model
    infers and executes without asking.
+7. **Constraint reconciliation** — check the stated constraints against each other and flag any
+   contradiction *before* building. Constraints often conflict silently: "non-developer" and
+   "no backend" cannot both hold for one-click auth; "runs on the device" and "heavy build"
+   cannot both hold without offload. Surface the conflict and resolve it in the checkpoint, not
+   mid-build after committing to the wrong architecture.
+8. **Human-layer activation steps** — enumerate every action *only the human can take* to make
+   the outcome live (obtain a key, register an OAuth app, deploy, approve, connect a source), up
+   front. These are discovered at checkpoint time, never mid-build. Everything else is the AI's
+   to build; the human-layer list is the exact, minimal set of steps left for the person.
 
 Stamp the checkpoint with a UTC timestamp and carry it forward (see
 [time-awareness.md](time-awareness.md)).
