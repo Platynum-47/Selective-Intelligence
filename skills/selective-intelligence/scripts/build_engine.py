@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
-"""SI build engine: the authoritative plan → session → build loop.
+"""SI build engine — a compatibility facade over the authoritative LaneSession.
 
-This is the executable engine the architecture requires SI to own. It powers the
-two-step build (plan, then build) using the canonical **si-planner** and **si-worker**
-subskills as the system prompts — not client-local prompts — and owns the session
-between the two steps. A client (e.g. the Platynum-47 gateway) calls this as a thin
-subprocess; SI stays the source of truth for planning, sessions, humanActions, and the
-build.
+Plan and build are no longer a separate session store. They create/advance ONE
+authoritative LaneSession (lane_session.py) and run the si.planning and si.execution
+lanes through a pluggable execution backend.
 
-Dependency-free (stdlib urllib), matching the other SI scripts. Bring-your-own key via
-`ANTHROPIC_API_KEY` (the end user's model, transported by the gateway — never stored here
-beyond the process). Model id via `SI_MODEL`/`MODEL_ID`. Sessions persist to disk so the
-plan and build steps — separate process calls — share one authoritative SI session.
+The model is one backend, not a global prerequisite. A deterministic ``test`` backend
+runs the same lane flow with no key (used by the kernel conformance run). A missing model
+key fails only the model-requiring lane, surfaced through the compatibility route — it is
+not an unconditional global stop.
 
-Usage:
-  ANTHROPIC_API_KEY=… python build_engine.py plan  --idea "a tip jar page"
-  ANTHROPIC_API_KEY=… python build_engine.py build --session <sessionId>
+Backends (SI_BACKEND): ``anthropic`` (default, needs ANTHROPIC_API_KEY) | ``test``.
 
-Exit codes: 0 ok · 2 bad input · 3 provider not configured · 4 invalid/expired session
-· 5 model/worker failure. All output is a single JSON object on stdout.
+Exit codes: 0 ok · 2 bad input · 3 backend/provider not available · 4 invalid session
+· 5 model/worker failure. Output is a single JSON object on stdout.
 """
 
 from __future__ import annotations
@@ -26,22 +21,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import tempfile
+import sys
 import urllib.error
 import urllib.request
-import uuid
-from datetime import UTC, datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lane_session as LS  # noqa: E402
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
-
-
-def session_dir() -> Path:
-    d = Path(os.environ.get("SI_SESSION_DIR") or (Path(tempfile.gettempdir()) / "si-build-sessions"))
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+BACKEND = os.environ.get("SI_BACKEND", "anthropic")
 
 
 def model_id() -> str:
@@ -83,61 +74,106 @@ def parse_json(text: str):
     return None
 
 
-# Canonical planner/worker prompts, sourced from the subskills + doctrine, with a strict
-# machine contract appended so the engine can return structured results to a gateway.
 PLAN_SYSTEM = (
     read("subskills", "si-planner", "SKILL.md")
     + "\n\n---\n"
     + read("references", "first-checkpoint.md")
     + '\n\n---\nReturn ONLY JSON: {"checkpoint": "<one plain sentence + 1-3 numbered steps for '
     'the person, no jargon>", "task_plan": ["<bounded work chunk>"], "human_actions": ["<only '
-    'real actions the person must take; empty if none>"], "go_no_go": "<\'go\' or the blocker>"}. '
-    "No code. No headings. Plain language a non-developer reads."
+    'real actions the person must take; empty if none>"], "go_no_go": "<\'go\' or the blocker>"}.'
 )
 
 WORKER_SYSTEM = (
     read("subskills", "si-worker", "SKILL.md")
     + '\n\n---\nBuild the slice as files that run together in a browser preview. Return ONLY JSON: '
     '{"files": {"index.html": "...", "style.css": "...", "script.js": "..."}, "behaviors_enabled": '
-    '["..."], "proof": "<what you checked>", "open_failures": ["..."]}. Self-contained HTML/CSS/JS '
-    "only, no external dependencies."
+    '["..."], "proof": "<what you checked>", "open_failures": ["..."]}. Self-contained only.'
 )
+
+
+def backend_available(key: str) -> tuple[bool, str]:
+    if BACKEND == "test":
+        return True, ""
+    if BACKEND == "anthropic":
+        return (bool(key), "" if key else "provider_unconfigured")
+    return False, "unknown_backend"
+
+
+def run_backend(role: str, system: str, user: str, key: str) -> str:
+    if BACKEND == "test":
+        if role == "plan":
+            return json.dumps(
+                {
+                    "checkpoint": "Plan (test backend): 1) scaffold the page, 2) wire behavior, 3) verify it renders.",
+                    "task_plan": ["scaffold", "wire", "verify"],
+                    "human_actions": [],
+                    "go_no_go": "go",
+                }
+            )
+        return json.dumps(
+            {
+                "files": {
+                    "index.html": "<h1>Test build</h1><p>Produced by the deterministic backend.</p>",
+                    "style.css": "body{font-family:system-ui;margin:2rem}",
+                    "script.js": "",
+                },
+                "behaviors_enabled": ["renders a static page"],
+                "proof": "deterministic test backend produced three files",
+                "open_failures": [],
+            }
+        )
+    return call_model(system, user, key, 4096 if role == "build" else 2048)
+
+
+def _find(session: dict, lane_def_id: str) -> dict | None:
+    for inst in session["lanes"].values():
+        if inst["laneDefinitionId"] == lane_def_id:
+            return inst
+    return None
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
     key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        print(json.dumps({"error": "model provider not configured", "code": "provider_unconfigured"}))
+    ok, reason = backend_available(key)
+    if not ok:
+        print(json.dumps({"error": "model provider not configured", "code": reason or "provider_unconfigured"}))
         return 3
     idea = (args.idea or "").strip()
     if not idea:
         print(json.dumps({"error": "empty idea", "code": "bad_input"}))
         return 2
+    session, errs = LS.compile_project(idea, ["si.planning", "si.execution"])
+    if errs or session is None:
+        print(json.dumps({"error": "; ".join(errs or ["compile failed"]), "code": "compile_error"}))
+        return 5
+    plan_inst = _find(session, "si.planning")
+    LS.transition(session, plan_inst["laneInstanceId"], "running")
     try:
-        raw = call_model(PLAN_SYSTEM, f"Build idea:\n{idea}", key, 2048)
+        raw = run_backend("plan", PLAN_SYSTEM, f"Build idea:\n{idea}", key)
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        LS.transition(session, plan_inst["laneInstanceId"], "system_error")
+        LS.save_session(session)
         print(json.dumps({"error": f"model call failed: {exc}", "code": "model_failure"}))
         return 5
     parsed = parse_json(raw) or {}
-    sid = uuid.uuid4().hex
-    session = {
-        "sessionId": sid,
-        "idea": idea,
-        "checkpoint": parsed.get("checkpoint", ""),
-        "task_plan": parsed.get("task_plan", []),
-        "human_actions": parsed.get("human_actions", []),
-        "go_no_go": parsed.get("go_no_go", ""),
-        "model": model_id(),
-        "created_at": datetime.now(UTC).isoformat(),
-    }
-    (session_dir() / f"{sid}.json").write_text(json.dumps(session, indent=2), encoding="utf-8")
+    LS.set_lane_outputs(
+        session,
+        plan_inst["laneInstanceId"],
+        [{"name": "checkpoint", "value": parsed.get("checkpoint", "")}, {"name": "task_plan", "value": parsed.get("task_plan", [])}],
+    )
+    LS.set_lane_human_actions(session, plan_inst["laneInstanceId"], parsed.get("human_actions", []))
+    LS.transition(session, plan_inst["laneInstanceId"], "verifying")
+    LS.transition(session, plan_inst["laneInstanceId"], "complete")
+    LS.save_session(session)
     print(
         json.dumps(
             {
-                "sessionId": sid,
-                "checkpoint": session["checkpoint"],
-                "humanActions": session["human_actions"],
+                "sessionId": session["sessionId"],
+                "checkpoint": parsed.get("checkpoint", ""),
+                "humanActions": plan_inst.get("humanActions", []),
                 "model": model_id(),
+                "backend": BACKEND,
+                "state": LS.global_state(session),
             }
         )
     )
@@ -146,40 +182,54 @@ def cmd_plan(args: argparse.Namespace) -> int:
 
 def cmd_build(args: argparse.Namespace) -> int:
     key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        print(json.dumps({"error": "model provider not configured", "code": "provider_unconfigured"}))
+    ok, reason = backend_available(key)
+    if not ok:
+        print(json.dumps({"error": "model provider not configured", "code": reason or "provider_unconfigured"}))
         return 3
-    sid = (args.session or "").strip()
-    sf = session_dir() / f"{sid}.json"
-    if not sid or not sf.exists():
+    session = LS.load_session((args.session or "").strip())
+    if not session:
         print(json.dumps({"error": "invalid or expired session", "code": "invalid_session"}))
         return 4
-    session = json.loads(sf.read_text(encoding="utf-8"))
-    prompt = (
-        f"Plan checkpoint:\n{session['checkpoint']}\n\n"
-        f"Task plan:\n{json.dumps(session['task_plan'])}\n\n"
-        f"Original idea:\n{session['idea']}"
-    )
+    exec_inst = _find(session, "si.execution")
+    if not exec_inst:
+        print(json.dumps({"error": "no execution lane in session", "code": "invalid_session"}))
+        return 4
+    if exec_inst["status"] != "ready":
+        print(json.dumps({"error": f"execution lane not ready (status {exec_inst['status']})", "code": "invalid_session"}))
+        return 4
+    plan_inst = _find(session, "si.planning")
+    outs = {o["name"]: o["value"] for o in plan_inst.get("outputs", [])}
+    checkpoint, task_plan = outs.get("checkpoint", ""), outs.get("task_plan", [])
+    LS.transition(session, exec_inst["laneInstanceId"], "running")
+    prompt = f"Plan checkpoint:\n{checkpoint}\n\nTask plan:\n{json.dumps(task_plan)}\n\nObjective:\n{session['objective']}"
     try:
-        raw = call_model(WORKER_SYSTEM, prompt, key, 4096)
+        raw = run_backend("build", WORKER_SYSTEM, prompt, key)
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+        LS.transition(session, exec_inst["laneInstanceId"], "system_error")
+        LS.save_session(session)
         print(json.dumps({"error": f"model call failed: {exc}", "code": "model_failure"}))
         return 5
     parsed = parse_json(raw)
     if not parsed or not isinstance(parsed.get("files"), dict):
+        LS.transition(session, exec_inst["laneInstanceId"], "system_error")
+        LS.save_session(session)
         print(json.dumps({"error": "worker did not return files", "code": "model_failure"}))
         return 5
     files = {k: v for k, v in parsed["files"].items() if isinstance(v, str)}
+    LS.set_lane_outputs(session, exec_inst["laneInstanceId"], [{"name": "files", "value": files}])
+    LS.transition(session, exec_inst["laneInstanceId"], "verifying")
+    LS.transition(session, exec_inst["laneInstanceId"], "complete")
+    LS.save_session(session)
     print(
         json.dumps(
             {
-                "sessionId": sid,
+                "sessionId": session["sessionId"],
                 "files": files,
-                "humanActions": session.get("human_actions", []),
+                "humanActions": plan_inst.get("humanActions", []),
                 "note": parsed.get("proof", "Build complete."),
-                "behaviors": parsed.get("behaviors_enabled", []),
-                "open_failures": parsed.get("open_failures", []),
                 "model": model_id(),
+                "backend": BACKEND,
+                "state": LS.global_state(session),
             }
         )
     )
@@ -187,12 +237,12 @@ def cmd_build(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="SI build engine (authoritative plan/build)")
+    ap = argparse.ArgumentParser(description="SI build engine (facade over LaneSession)")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("plan", help="idea -> checkpoint + session + humanActions")
+    p = sub.add_parser("plan")
     p.add_argument("--idea", required=True)
     p.set_defaults(func=cmd_plan)
-    b = sub.add_parser("build", help="sessionId -> files + proof")
+    b = sub.add_parser("build")
     b.add_argument("--session", required=True)
     b.set_defaults(func=cmd_build)
     args = ap.parse_args()

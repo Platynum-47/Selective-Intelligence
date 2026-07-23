@@ -43,7 +43,30 @@ STATUSES = {
     "cancelled",
 }
 TERMINAL_OK = {"complete"}
-MACHINE_RUNNABLE = {"pending", "ready", "running", "waiting_dependency", "verifying", "repairing"}
+RUNNABLE_NOW = {"ready", "running", "verifying", "repairing"}
+
+# Legal status transitions. Illegal transitions are rejected (no status mutation by fiat).
+ALLOWED_TRANSITIONS = {
+    "pending": {"pending", "ready", "waiting_dependency", "cancelled"},
+    "waiting_dependency": {"waiting_dependency", "ready", "cancelled"},
+    "ready": {"ready", "running", "human_blocked", "waiting_dependency", "cancelled"},
+    "running": {"running", "verifying", "human_blocked", "repairing", "system_error", "cancelled"},
+    "verifying": {"verifying", "complete", "repairing", "system_error"},
+    "repairing": {"repairing", "running", "human_blocked", "system_error"},
+    "human_blocked": {"human_blocked", "ready", "cancelled"},
+    "complete": {"complete"},
+    "system_error": {"system_error", "ready", "cancelled"},
+    "cancelled": {"cancelled"},
+}
+
+
+def can_transition(frm: str, to: str) -> bool:
+    return to in ALLOWED_TRANSITIONS.get(frm, set())
+
+
+def is_integration(inst: dict) -> bool:
+    lid = inst.get("laneDefinitionId", "")
+    return lid == "si.integration" or lid.startswith("integration.")
 
 
 def sessions_dir() -> Path:
@@ -72,12 +95,54 @@ def save_session(session: dict) -> None:
 
 def new_session(objective: str) -> dict:
     return {
+        "schema_version": "si_lane_session.v1",
         "sessionId": uuid.uuid4().hex,
         "objective": objective,
+        "known_facts": [],
+        "assumptions": [],
+        "backend_selections": {},
         "lanes": {},
         "created_at": _now(),
         "updated_at": _now(),
     }
+
+
+def set_lane_outputs(session: dict, lane_instance_id: str, outputs: list) -> None:
+    session["lanes"][lane_instance_id]["outputs"] = outputs
+    session["lanes"][lane_instance_id]["updatedAt"] = _now()
+
+
+def set_lane_human_actions(session: dict, lane_instance_id: str, actions: list) -> None:
+    """Human actions belong to the lane that requires them."""
+    session["lanes"][lane_instance_id]["humanActions"] = list(actions)
+    session["lanes"][lane_instance_id]["updatedAt"] = _now()
+
+
+def session_human_actions(session: dict) -> list:
+    """Session-level aggregation of unresolved human actions across all lanes."""
+    out = []
+    for inst in session["lanes"].values():
+        for a in inst.get("humanActions", []):
+            if isinstance(a, dict) and a.get("resolved"):
+                continue
+            out.append({"lane": inst["laneDefinitionId"], "laneInstanceId": inst["laneInstanceId"], "action": a})
+    return out
+
+
+def transition(session: dict, lane_instance_id: str, to: str) -> tuple[bool, str]:
+    inst = session["lanes"].get(lane_instance_id)
+    if not inst:
+        return False, "lane instance not found"
+    if to not in STATUSES:
+        return False, f"invalid status '{to}'"
+    if not can_transition(inst["status"], to):
+        return False, f"illegal transition {inst['status']} -> {to}"
+    inst["status"] = to
+    inst["updatedAt"] = _now()
+    if to == "complete":
+        inst["completedAt"] = _now()
+    recompute_ready(session)
+    return True, "ok"
 
 
 def make_instance(lane_def: dict) -> dict:
@@ -149,17 +214,26 @@ def ready_lanes(session: dict) -> list[dict]:
 
 def global_state(session: dict) -> str:
     lanes = list(session["lanes"].values())
-    if lanes and all(i["status"] == "complete" for i in lanes):
-        return "COMPLETE"
-    if any(i["status"] in MACHINE_RUNNABLE and i["status"] != "waiting_dependency" for i in lanes):
+    if not lanes:
+        return "EMPTY"
+    statuses = [i["status"] for i in lanes]
+    # Any lane runnable now -> keep working.
+    if any(s in RUNNABLE_NOW for s in statuses):
         return "RUNNING"
-    if any(i["status"] == "ready" for i in lanes):
-        return "RUNNING"
-    # No runnable machine lane remains.
-    if any(i["status"] == "human_blocked" for i in lanes):
+    # Nothing runnable right now.
+    if all(s == "complete" for s in statuses):
+        integ = [i for i in lanes if is_integration(i)]
+        # All lanes complete WITHOUT an integration lane is not COMPLETE.
+        if integ and all(i["status"] == "complete" for i in integ):
+            return "COMPLETE"
+        return "AWAITING_INTEGRATION"
+    # Global HUMAN_BLOCKED only when no runnable machine lane remains.
+    if any(s == "human_blocked" for s in statuses):
         return "HUMAN_BLOCKED"
-    if any(i["status"] == "waiting_dependency" for i in lanes):
-        return "STUCK"  # deps can never resolve (e.g., a blocked upstream)
+    if any(s == "system_error" for s in statuses):
+        return "SYSTEM_ERROR"
+    if any(s == "waiting_dependency" for s in statuses):
+        return "STUCK"  # upstream can never resolve
     return "RUNNING"
 
 
@@ -190,18 +264,10 @@ def cmd_set_status(args: argparse.Namespace) -> int:
     if not session:
         print(json.dumps({"error": "session not found"}))
         return 4
-    if args.status not in STATUSES:
-        print(json.dumps({"error": f"invalid status; one of {sorted(STATUSES)}"}))
+    ok, msg = transition(session, args.lane, args.status)
+    if not ok:
+        print(json.dumps({"error": msg}))
         return 2
-    inst = session["lanes"].get(args.lane)
-    if not inst:
-        print(json.dumps({"error": "lane instance not found"}))
-        return 4
-    inst["status"] = args.status
-    inst["updatedAt"] = _now()
-    if args.status == "complete":
-        inst["completedAt"] = _now()
-    recompute_ready(session)
     save_session(session)
     print(json.dumps({"ok": True, "state": global_state(session), "lanes": _summary(session)}))
     return 0
