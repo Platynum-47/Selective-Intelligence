@@ -100,6 +100,7 @@
     "scripts/eval_runner.py",
     "scripts/feedback.py",
     "scripts/lane_registry.py",
+    "scripts/lane_session.py",
     "scripts/release.py",
     "scripts/start_pack.py"
   ]
