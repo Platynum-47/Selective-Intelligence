@@ -252,6 +252,8 @@ Ask before continuing only when one of these is true:
 
 When a question is needed, ask one compact question and explain the consequence. Offer a recommended default when safe.
 
+A choice between options that are all required is not a question — do them all instead of asking which comes first. Only a genuine, mutually exclusive fork whose answer changes the outcome is worth the user's time; presenting a false either/or offloads work the AI should just do.
+
 ## Output economy
 
 Spend tokens on building, not narration. Emit the minimum response that fully serves the user and still honors the truth and safety rules. Read [references/ui-ux-and-output.md](references/ui-ux-and-output.md).

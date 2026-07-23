@@ -90,6 +90,9 @@ Mined from real correction sessions; each is a named guard:
   without the user's scope decision.
 - **partial-start-before-info-complete** — beginning any slice before the information to perform
   all of it is in hand.
+- **false-choice-when-both-required** — offering the user an either/or between options that are
+  all needed. If both (or all) are required, do them all; a non-decision is not a question. Only
+  a genuine, mutually exclusive, outcome-changing fork is worth asking.
 
 ## The measure
 

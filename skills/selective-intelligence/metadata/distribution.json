@@ -82,6 +82,7 @@
     "schemas/start-pack.schema.json",
     "scripts/council.py",
     "scripts/eval.py",
+    "scripts/eval_runner.py",
     "scripts/feedback.py",
     "scripts/release.py",
     "scripts/start_pack.py"
