@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shlex
 import re
 import subprocess
 import uuid
@@ -56,21 +55,46 @@ _INSTALLERS = {
 _DEPLOY_WORDS = {"deploy", "publish", "release"}
 _WINDOWS_EXECUTABLE_SUFFIXES = (".exe", ".cmd", ".bat", ".com", ".ps1")
 _TRANSPARENT_WRAPPERS = {"env", "command", "nice", "nohup", "timeout", "stdbuf", "sudo", "doas"}
+_READ_ONLY_GIT = {
+    "describe", "diff", "grep", "log", "ls-files", "ls-tree", "rev-parse",
+    "shortlog", "show", "status", "version",
+}
+_ENV_ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.DOTALL)
 
 
 def _command_basename(token: str) -> str:
     """Return a platform-normalized command basename without Windows suffixes."""
-    name = Path(token).name.lower()
-    for suffix in _WINDOWS_EXECUTABLE_SUFFIXES:
-        if name.endswith(suffix):
-            return name[: -len(suffix)]
+    name = str(token).strip()
+    while len(name) >= 2 and name[0] == name[-1] and name[0] in {"'", '"'}:
+        name = name[1:-1].strip()
+    name = re.split(r"[/\\]", name)[-1].lower()
+    stripped = True
+    while stripped:
+        stripped = False
+        for suffix in _WINDOWS_EXECUTABLE_SUFFIXES:
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
+                stripped = True
+                break
     return name
 
 
-def _skip_wrapper_prefix(base: str, argv: list[str]) -> list[str] | None:
-    """Return argv with one transparent wrapper removed, or None if not unwrapable."""
+def _redact_argv(argv: Sequence[str]) -> list[str]:
+    redacted: list[str] = []
+    for value in argv:
+        token = str(value)
+        unquoted = token
+        while len(unquoted) >= 2 and unquoted[0] == unquoted[-1] and unquoted[0] in {"'", '"'}:
+            unquoted = unquoted[1:-1]
+        match = _ENV_ASSIGNMENT.fullmatch(unquoted)
+        redacted.append(f"{match.group(1)}=<redacted>" if match else token)
+    return redacted
+
+
+def _skip_wrapper_prefix(base: str, argv: list[str]) -> tuple[list[str] | None, str | None]:
+    """Remove one wrapper, returning an ambiguity reason on malformed input."""
     if not argv or _command_basename(argv[0]) != base:
-        return None
+        return None, "wrapper executable did not match resolver state"
     rest = argv[1:]
 
     if base == "env":
@@ -78,21 +102,35 @@ def _skip_wrapper_prefix(base: str, argv: list[str]) -> list[str] | None:
         while index < len(rest):
             token = rest[index]
             if token == "--":
-                return rest[index + 1 :]
-            if token in {"-i", "-0", "-v", "-S"}:
+                return rest[index + 1 :], None
+            if (
+                token in {"-S", "--split-string"}
+                or token.startswith("-S")
+                or token.startswith("--split-string=")
+            ):
+                return None, "env -S command splitting is ambiguous"
+            if token in {"-i", "--ignore-environment", "-0", "--null", "-v", "--debug"}:
                 index += 1
                 continue
-            if token in {"-u", "-C", "-P"}:
+            if token in {"-C", "--chdir", "-P"} or token.startswith("--chdir="):
+                return None, f"env option {token.split('=', 1)[0]} changes command resolution context"
+            if token in {"-u", "--unset"}:
+                if index + 1 >= len(rest):
+                    return None, f"env option {token} is missing its value"
                 index += 2
                 continue
+            if token.startswith("--unset="):
+                if token.endswith("="):
+                    return None, f"env option {token.split('=', 1)[0]} is missing its value"
+                index += 1
+                continue
             if token.startswith("-"):
+                return None, f"unsupported env option: {token}"
+            if _ENV_ASSIGNMENT.fullmatch(token):
                 index += 1
                 continue
-            if "=" in token and not token.startswith("-"):
-                index += 1
-                continue
-            return rest[index:]
-        return []
+            return rest[index:], None
+        return [], None
 
     if base == "command":
         index = 0
@@ -102,91 +140,228 @@ def _skip_wrapper_prefix(base: str, argv: list[str]) -> list[str] | None:
                 index += 1
                 continue
             if token == "--":
-                return rest[index + 1 :]
+                return rest[index + 1 :], None
             if token.startswith("-"):
-                index += 1
-                continue
-            return rest[index:]
-        return []
+                return None, f"unsupported command option: {token}"
+            return rest[index:], None
+        return [], None
 
     if base == "nice":
         index = 0
         if index < len(rest) and rest[index] in {"-n", "--adjustment"}:
+            if index + 1 >= len(rest):
+                return None, f"nice option {rest[index]} is missing its value"
+            if not re.fullmatch(r"-?\d+", rest[index + 1]):
+                return None, f"nice option {rest[index]} has an invalid value"
             index += 2
+        elif index < len(rest) and rest[index].startswith("--adjustment="):
+            if not re.fullmatch(r"-?\d+", rest[index].split("=", 1)[1]):
+                return None, "nice option --adjustment has an invalid value"
+            index += 1
         elif index < len(rest) and re.fullmatch(r"-?\d+", rest[index] or ""):
             index += 1
-        return rest[index:]
+        elif index < len(rest) and rest[index].startswith("-"):
+            return None, f"unsupported nice option: {rest[index]}"
+        return rest[index:], None
 
     if base == "nohup":
-        return rest[1:] if rest[:1] == ["--"] else rest
+        if rest[:1] == ["--"]:
+            rest = rest[1:]
+        elif rest[:1] and rest[0].startswith("-"):
+            return None, f"unsupported nohup option: {rest[0]}"
+        return rest, None
 
     if base == "timeout":
         index = 0
         while index < len(rest):
             token = rest[index]
             if token in {"-s", "--signal", "-k", "--kill-after"}:
+                if index + 1 >= len(rest):
+                    return None, f"timeout option {token} is missing its value"
                 index += 2
+                continue
+            if any(token.startswith(prefix) for prefix in ("--signal=", "--kill-after=")):
+                if token.endswith("="):
+                    return None, f"timeout option {token.split('=', 1)[0]} is missing its value"
+                index += 1
                 continue
             if token in {"--preserve-status", "--foreground", "-v", "--verbose"}:
                 index += 1
                 continue
-            if token.startswith("-"):
+            if token == "--":
                 index += 1
-                continue
-            # duration token then command
-            return rest[index + 1 :]
-        return []
+                break
+            if token.startswith("-"):
+                return None, f"unsupported timeout option: {token}"
+            break
+        if index >= len(rest):
+            return None, "timeout is missing its duration"
+        if not re.fullmatch(r"(?:\d+(?:\.\d*)?|\.\d+)[smhd]?", rest[index], re.IGNORECASE):
+            return None, f"timeout has an invalid duration: {rest[index]}"
+        if index + 1 >= len(rest):
+            return [], None
+        return rest[index + 1 :], None
 
     if base == "stdbuf":
         index = 0
         while index < len(rest):
             token = rest[index]
             if token in {"-i", "-o", "-e", "--input", "--output", "--error"}:
+                if index + 1 >= len(rest):
+                    return None, f"stdbuf option {token} is missing its value"
                 index += 2
                 continue
-            if token.startswith("-"):
+            if re.fullmatch(r"-[ioe].+", token) or any(
+                token.startswith(prefix) and not token.endswith("=")
+                for prefix in ("--input=", "--output=", "--error=")
+            ):
                 index += 1
                 continue
-            return rest[index:]
-        return []
+            if token == "--":
+                return rest[index + 1 :], None
+            if token.startswith("-"):
+                return None, f"unsupported stdbuf option: {token}"
+            return rest[index:], None
+        return [], None
 
     if base in {"sudo", "doas"}:
         index = 0
         value_options = {
-            "-u", "-g", "-h", "-C", "-D", "-R", "-p", "-b",
-            "--user", "--group", "--host", "--chdir", "--chroot", "--prompt",
+            "-u", "-g", "-h", "-C", "-p", "-b",
+            "--user", "--group", "--host", "--prompt",
+        }
+        context_options = {"-D", "-R", "--chdir", "--chroot"}
+        flag_options = {
+            "-A", "-E", "-H", "-K", "-S", "-V", "-n", "-k", "-l", "-s",
+            "--askpass", "--preserve-env", "--set-home", "--stdin", "--non-interactive",
         }
         while index < len(rest):
             token = rest[index]
             if token == "--":
-                return rest[index + 1 :]
+                return rest[index + 1 :], None
+            if token in context_options or any(
+                token.startswith(option + "=") for option in context_options if option.startswith("--")
+            ):
+                return None, f"{base} option {token.split('=', 1)[0]} changes execution context"
             if token in value_options:
+                if index + 1 >= len(rest):
+                    return None, f"{base} option {token} is missing its value"
                 index += 2
                 continue
-            if token.startswith("-"):
+            if any(token.startswith(option + "=") for option in value_options if option.startswith("--")):
+                if token.endswith("="):
+                    return None, f"{base} option {token.split('=', 1)[0]} is missing its value"
                 index += 1
                 continue
-            return rest[index:]
-        return []
+            if token in flag_options:
+                index += 1
+                continue
+            if token.startswith("-"):
+                return None, f"unsupported {base} option: {token}"
+            return rest[index:], None
+        return [], None
 
-    return None
+    return None, f"unsupported wrapper: {base}"
 
 
-def _resolve_command_argv(argv: Sequence[str]) -> list[str]:
-    """Peel transparent wrappers and keep the effective command argv."""
-    current = [str(token) for token in argv]
-    # Bound unwrap depth to avoid pathological wrapper chains.
+def _resolve_command_argv(argv: Sequence[str] | str) -> dict[str, Any]:
+    """Resolve structured argv without invoking a shell.
+
+    This resolver is intentionally lexical. It narrows execution to commands
+    the policy can identify, but it is not an OS sandbox and cannot prove that
+    an allowed test suite has no filesystem side effects.
+    """
+    if isinstance(argv, str):
+        original = [argv]
+        return {
+            "originalArgv": original,
+            "redactedOriginalArgv": _redact_argv(original),
+            "effectiveArgv": [],
+            "normalizedExecutable": "",
+            "wrapperChain": [],
+            "status": "ambiguous",
+            "reason": "shell-form string action argv is not allowed",
+        }
+    if not isinstance(argv, Sequence) or isinstance(argv, (bytes, bytearray)):
+        original = []
+        return {
+            "originalArgv": original,
+            "redactedOriginalArgv": original,
+            "effectiveArgv": [],
+            "normalizedExecutable": "",
+            "wrapperChain": [],
+            "status": "ambiguous",
+            "reason": "action argv is not a sequence",
+        }
+    if any(not isinstance(token, str) for token in argv):
+        original = [str(token) for token in argv]
+        return {
+            "originalArgv": original,
+            "redactedOriginalArgv": _redact_argv(original),
+            "effectiveArgv": [],
+            "normalizedExecutable": "",
+            "wrapperChain": [],
+            "status": "ambiguous",
+            "reason": "action argv contains a non-string token",
+        }
+    original = list(argv)
+
+    current = list(original)
+    wrappers: list[str] = []
     for _ in range(32):
         if not current:
-            return current
+            return {
+                "originalArgv": original,
+                "redactedOriginalArgv": _redact_argv(original),
+                "effectiveArgv": [],
+                "normalizedExecutable": "",
+                "wrapperChain": wrappers,
+                "status": "no_command",
+                "reason": "no effective command remains after wrapper resolution",
+            }
         base = _command_basename(current[0])
+        if not base:
+            return {
+                "originalArgv": original,
+                "redactedOriginalArgv": _redact_argv(original),
+                "effectiveArgv": [],
+                "normalizedExecutable": "",
+                "wrapperChain": wrappers,
+                "status": "no_command",
+                "reason": "effective command has an empty executable",
+            }
         if base not in _TRANSPARENT_WRAPPERS:
-            return current
-        unwrapped = _skip_wrapper_prefix(base, current)
-        if unwrapped is None or unwrapped == current:
-            return current
+            return {
+                "originalArgv": original,
+                "redactedOriginalArgv": _redact_argv(original),
+                "effectiveArgv": _redact_argv(current),
+                "normalizedExecutable": base,
+                "wrapperChain": wrappers,
+                "status": "resolved",
+                "reason": "effective executable resolved from structured argv",
+            }
+        wrappers.append(base)
+        unwrapped, error = _skip_wrapper_prefix(base, current)
+        if error is not None or unwrapped is None:
+            return {
+                "originalArgv": original,
+                "redactedOriginalArgv": _redact_argv(original),
+                "effectiveArgv": [],
+                "normalizedExecutable": "",
+                "wrapperChain": wrappers,
+                "status": "ambiguous",
+                "reason": error or "wrapper resolution failed",
+            }
         current = list(unwrapped)
-    return current
+    return {
+        "originalArgv": original,
+        "redactedOriginalArgv": _redact_argv(original),
+        "effectiveArgv": _redact_argv(current),
+        "normalizedExecutable": _command_basename(current[0]) if current else "",
+        "wrapperChain": wrappers,
+        "status": "ambiguous",
+        "reason": "transparent wrapper depth limit reached",
+    }
 
 
 def _git_subcommand(argv: list[str]) -> str | None:
@@ -225,45 +400,66 @@ def _install_requested(base: str, argv: list[str]) -> bool:
     return False
 
 
-def _payload_policy_violation(payload: str) -> str | None:
-    normalized = " ".join(payload.lower().split())
-    if re.search(r"\bgit(?:\.exe)?\b.*\b(?:" + "|".join(sorted(_MUTATING_GIT)) + r")\b", normalized):
-        return "nested shell command requests Git mutation"
-    if re.search(
-        r"\b(?:npm(?:\.cmd|\.ps1)?|pnpm|yarn|pip3?|poetry|uv|cargo)\b.*\b(?:install|add)\b",
-        normalized,
+def _inline_execution_violation(base: str, argv: list[str]) -> str | None:
+    """Reject arbitrary inline programs without inspecting or approving payload text."""
+    lowered = [token.lower() for token in argv]
+    if base in {"sh", "bash", "zsh", "fish"} and any(
+        token == "-c" or (token.startswith("-c") and len(token) > 2) for token in lowered
     ):
-        return "nested shell command requests dependency installation"
-    if re.search(r"\b(?:deploy|publish|release)\b", normalized):
-        return "nested shell command requests deployment or publishing"
+        return "arbitrary shell inline execution prohibited"
+    if base == "cmd" and any(token == "/c" or token.startswith("/c:") for token in lowered):
+        return "arbitrary cmd inline execution prohibited"
+    if base in {"powershell", "pwsh"} and any(
+        token in {"-command", "-c"} or token.startswith("-command:")
+        for token in lowered
+    ):
+        return "arbitrary PowerShell inline execution prohibited"
+    if _is_python(base) and any(
+        token == "-c" or (token.startswith("-c") and len(token) > 2) for token in lowered
+    ):
+        return "arbitrary Python inline execution prohibited"
+    if base in {"node", "nodejs"} and any(
+        token in {"-e", "--eval"}
+        or (token.startswith("-e") and not token.startswith("--"))
+        or token.startswith("--eval=")
+        for token in lowered
+    ):
+        return "arbitrary Node inline execution prohibited"
     return None
 
 
-def _nested_shell_violation(base: str, argv: list[str]) -> str | None:
-    payload: str | None = None
+def _is_python(base: str) -> bool:
+    return base in {"python", "python3", "py"} or bool(re.fullmatch(r"python\d+(?:\.\d+)*", base))
+
+
+def _structured_command_allowed(base: str, argv: list[str]) -> tuple[bool, str]:
+    """Allow only the smallest structured read/verification surface in use."""
     lowered = [token.lower() for token in argv]
-    if base in {"sh", "bash", "zsh", "fish"} and "-c" in lowered:
-        idx = lowered.index("-c")
-        payload = argv[idx + 1] if idx + 1 < len(argv) else ""
-    elif base == "cmd" and "/c" in lowered:
-        idx = lowered.index("/c")
-        payload = " ".join(argv[idx + 1 :])
-    elif base in {"powershell", "pwsh"}:
-        for marker in ("-command", "-c"):
-            if marker in lowered:
-                idx = lowered.index(marker)
-                payload = " ".join(argv[idx + 1 :])
-                break
-    elif base in {"python", "python3", "py"} and "-c" in lowered:
-        idx = lowered.index("-c")
-        payload = argv[idx + 1] if idx + 1 < len(argv) else ""
-    elif base in {"node", "nodejs"} and ("-e" in lowered or "--eval" in lowered):
-        marker = "-e" if "-e" in lowered else "--eval"
-        idx = lowered.index(marker)
-        payload = argv[idx + 1] if idx + 1 < len(argv) else ""
-    if payload is None:
-        return None
-    return _payload_policy_violation(payload)
+    if base == "git":
+        subcommand = _git_subcommand(argv)
+        unsafe_git_options = {
+            "-c", "-C", "--config-env", "--exec-path", "--git-dir", "--namespace",
+            "--output", "--work-tree", "--ext-diff", "--textconv",
+        }
+        if any(
+            token in unsafe_git_options
+            or any(token.startswith(option + "=") for option in unsafe_git_options if option.startswith("--"))
+            or token.startswith("--open-files-in-pager")
+            for token in argv[1:]
+        ):
+            return False, "Git option may change context, write output, or invoke an external helper"
+        if subcommand in _READ_ONLY_GIT or lowered[1:] in (["--version"], ["-v"]):
+            return True, "read-only Git command"
+        return False, "Git command is not on the read-only allowlist"
+    if _is_python(base):
+        if lowered[1:] in (["--version"], ["-v"]):
+            return True, "Python version query"
+        if len(lowered) >= 3 and lowered[1:3] == ["-m", "unittest"]:
+            return True, "structured Python unittest verification"
+        return False, "Python command is not on the structured verification allowlist"
+    if base in {"node", "nodejs"} and lowered[1:] in (["--version"], ["-v"]):
+        return True, "Node version query"
+    return False, "executable is not on the structured command allowlist"
 
 
 class PolicyGuard:
@@ -299,19 +495,32 @@ class PolicyGuard:
         allowed: bool,
         reason: str,
         constraint: str,
+        resolution: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return {
+        decision = {
             "decisionId": _id("policy"),
             "timestamp": _now(),
             "sessionId": session_id,
             "taskId": task_id,
             "requestedOperation": action,
             "relevantConstraint": constraint,
+            "matchedConstraint": constraint,
             "decision": "ALLOW" if allowed else "DENY",
             "allowed": allowed,
             "reason": reason,
             "adapterInvocationStatus": "PENDING" if allowed else "NOT_INVOKED",
         }
+        if resolution is not None:
+            decision.update(
+                {
+                    "effectiveArgv": resolution["effectiveArgv"],
+                    "normalizedExecutable": resolution["normalizedExecutable"],
+                    "wrapperChain": resolution["wrapperChain"],
+                    "resolutionStatus": resolution["status"],
+                    "resolutionReason": resolution["reason"],
+                }
+            )
+        return decision
 
     def authorize(
         self,
@@ -353,24 +562,37 @@ class PolicyGuard:
             )
 
         if kind == "process.run":
-            argv = action.get("argv") or []
-            if isinstance(argv, str):
-                argv = shlex.split(argv)
-            argv = [str(v) for v in argv]
+            raw_argv = action.get("argv")
+            resolution = _resolve_command_argv(raw_argv if raw_argv is not None else [])
+            safe_action = dict(action)
+            safe_action["argv"] = resolution["redactedOriginalArgv"]
             cwd = _resolved(str(action.get("cwd") or os.getcwd()))
-            effective_argv = _resolve_command_argv(argv)
-            base = _command_basename(effective_argv[0]) if effective_argv else ""
+            safe_action["cwd"] = str(cwd)
+            effective_argv = list(resolution["effectiveArgv"])
+            base = str(resolution["normalizedExecutable"])
             lowered = [v.lower() for v in effective_argv]
+
+            if resolution["status"] != "resolved":
+                return self._decision(
+                    session_id=session_id,
+                    task_id=task_id,
+                    action=safe_action,
+                    allowed=False,
+                    reason=f"command resolution failed closed: {resolution['reason']}",
+                    constraint="only unambiguous structured command argv may execute",
+                    resolution=resolution,
+                )
 
             # Never execute commands from inside a protected repo in this vertical.
             if any(_inside(cwd, root) for root in self.canonical_roots):
                 return self._decision(
                     session_id=session_id,
                     task_id=task_id,
-                    action=action,
+                    action=safe_action,
                     allowed=False,
                     reason=f"process working directory is a protected canonical repository: {cwd}",
                     constraint="no state-changing actions in canonical repositories",
+                    resolution=resolution,
                 )
 
             git_subcommand = _git_subcommand(effective_argv) if base == "git" else None
@@ -378,31 +600,38 @@ class PolicyGuard:
                 return self._decision(
                     session_id=session_id,
                     task_id=task_id,
-                    action=action,
+                    action=safe_action,
                     allowed=False,
                     reason=f"Git mutation prohibited: git {git_subcommand}",
                     constraint="no commit, push, branch, reset, clean, stash, or other Git mutation",
+                    resolution=resolution,
                 )
 
             if self.prohibit_dependency_install and _install_requested(base, effective_argv):
                 return self._decision(
                     session_id=session_id,
                     task_id=task_id,
-                    action=action,
+                    action=safe_action,
                     allowed=False,
                     reason="dependency installation prohibited",
                     constraint="no dependency installation",
+                    resolution=resolution,
                 )
 
-            nested_violation = _nested_shell_violation(base, effective_argv)
-            if nested_violation:
+            inline_violation = _inline_execution_violation(base, effective_argv)
+            if inline_violation and (
+                self.prohibit_git_mutation
+                or self.prohibit_dependency_install
+                or self.prohibit_deploy
+            ):
                 return self._decision(
                     session_id=session_id,
                     task_id=task_id,
-                    action=action,
+                    action=safe_action,
                     allowed=False,
-                    reason=nested_violation,
-                    constraint="prohibitions apply through nested shell commands",
+                    reason=inline_violation,
+                    constraint="arbitrary inline execution is denied while prohibitions are active",
+                    resolution=resolution,
                 )
 
             if self.prohibit_deploy and (
@@ -412,29 +641,44 @@ class PolicyGuard:
                 return self._decision(
                     session_id=session_id,
                     task_id=task_id,
-                    action=action,
+                    action=safe_action,
                     allowed=False,
                     reason="deployment or publishing prohibited",
                     constraint="no deploy or publish",
+                    resolution=resolution,
                 )
 
             if not any(_inside(cwd, root) or cwd == root for root in self.writable_roots):
                 return self._decision(
                     session_id=session_id,
                     task_id=task_id,
-                    action=action,
+                    action=safe_action,
                     allowed=False,
                     reason=f"process cwd outside authorized disposable scope: {cwd}",
                     constraint="process execution restricted to declared disposable scope",
+                    resolution=resolution,
+                )
+
+            command_allowed, command_reason = _structured_command_allowed(base, effective_argv)
+            if not command_allowed:
+                return self._decision(
+                    session_id=session_id,
+                    task_id=task_id,
+                    action=safe_action,
+                    allowed=False,
+                    reason=command_reason,
+                    constraint="commands restricted to explicit read-only and verification allowlist",
+                    resolution=resolution,
                 )
 
             return self._decision(
                 session_id=session_id,
                 task_id=task_id,
-                action=action,
+                action=safe_action,
                 allowed=True,
-                reason="process is read/verify work inside authorized disposable scope",
-                constraint="process execution restricted to declared disposable scope",
+                reason=command_reason,
+                constraint="commands restricted to explicit read-only and verification allowlist",
+                resolution=resolution,
             )
 
         return self._decision(
@@ -512,7 +756,13 @@ def guarded_run(
         "evidenceId": _id("command"),
         "sessionId": session_id,
         "taskId": task_id,
-        "argv": command,
+        "argv": _redact_argv(command),
+        "effectiveArgv": decision["effectiveArgv"],
+        "normalizedExecutable": decision["normalizedExecutable"],
+        "wrapperChain": decision["wrapperChain"],
+        "resolutionStatus": decision["resolutionStatus"],
+        "matchedConstraint": decision["matchedConstraint"],
+        "adapterInvocationStatus": decision["adapterInvocationStatus"],
         "cwd": str(workdir),
         "startedAt": started,
         "endedAt": ended,
