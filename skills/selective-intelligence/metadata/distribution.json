@@ -91,6 +91,7 @@
     "references/ui-ux-and-output.md",
     "schemas/council-packet.schema.json",
     "schemas/start-pack.schema.json",
+    "scripts/build_engine.py",
     "scripts/council.py",
     "scripts/eval.py",
     "scripts/eval_runner.py",
