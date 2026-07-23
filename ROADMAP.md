@@ -5,11 +5,15 @@ started; nothing on this list is designed or built yet.
 
 ## Upcoming
 
-### Platynum-47 — mobile-first front-end code editor
+### Platynum-47 — full-stack AI builder (the SI front door)
 
-**Platynum-47** is a front-end code editor that delivers **Replit-level mobility without the bloat** — edit and
-build from anywhere, mobile included, without Replit's lock-in, cost, and friction. Positioned
-as another layer of Selective Intelligence.
+**Platynum-47** is a **full-stack AI builder** — like Replit, without the bloat or lock-in. You
+describe what you want and it builds it, running on the user's **own models** (BYO LLM key) and
+**own outside sources** (GitHub, Drive, DBs, APIs). It is used **instead of VS Code + a ChatGPT
+browser tab** — one surface, not an IDE plus a chat window. Runs in three surface modes:
+**single-surface** (one device, desktop or mobile), **dual-surface** (two devices paired; the phone
+can be the dev server), or **mobile-only**. Connectors are **one-click** for a vibe coder — never
+"paste a token" (see `references/non-developer-surface.md`). Another layer of Selective Intelligence.
 
 **Model: a surface + bring-your-own connectors.** We build the surface (the editor shell).
 Users plug in their own credentials — API keys or OAuth logins — for the services they use:
@@ -97,8 +101,10 @@ build prompt is the **first-checkpoint** artifact, and all durable work is **tim
 
 - **T0 — Surface** ✅ *(shipped)* — editor shell, on-device runtime, live preview, local save,
   handoff export. Done: runs on a phone via the deployed link.
-- **T1 — Source & ship connectors** — BYO GitHub + Google Drive + deploy connector (Render/Vercel).
-  Done: edit a GitHub file on your phone and redeploy it.
+- **T1 — Source & ship connectors** — GitHub + Google Drive + deploy (Render/Vercel), all as
+  **one-click connect** (OAuth via a thin broker), never a pasted token. Current interim GitHub flow
+  uses a token and is flagged in-product as an architecture gap until the broker lands.
+  Done: connect in one click, edit a file on your phone, and it redeploys.
 - **T2 — Intelligence / the Checkpoint** *(the heart)* — model-key connector + the SI Council
   (Worker/Objector/Aligner) on the user's keys + JumpStart cold-start + the first-checkpoint gate;
   friction ladder governs slices. Reuses the Selective-Intelligence skill/scripts/gates verbatim.

@@ -35,7 +35,11 @@ Selective Inheritance is one operation inside Selective Intelligence. Inheritanc
 
 ## First checkpoint (before any build)
 
-Before building, creating, or finishing any product, feature, or system beyond a Tier 0 scratch throwaway, emit a locked full-scope intent checkpoint and do not start any part of the work until it is complete and information-sufficient. The checkpoint recovers the largest truthful outcome the seed supports (the prompt is a seed, not the output size), decomposes the whole product into bounded slices with proof, maps canonical reuse, sequences the build, and separates genuine authority decisions from inferred execution. Recover missing inputs by inference; resolve real unknowns in one consolidated up-front pass, never trickle-asked mid-build. Scope-reduction, single-threading, permission-per-step, and partial starts on partial information are drift, not prudence — a deadline authorizes none of them. Read [references/first-checkpoint.md](references/first-checkpoint.md). The measure of this skill is how few corrections a user needs to reach a correct checkpoint; the target is zero.
+Before building, creating, or finishing any product, feature, or system beyond a Tier 0 scratch throwaway, emit a locked full-scope intent checkpoint and do not start any part of the work until it is complete and information-sufficient. The checkpoint recovers the largest truthful outcome the seed supports (the prompt is a seed, not the output size), decomposes the whole product into bounded slices with proof, maps canonical reuse, sequences the build, and separates genuine authority decisions from inferred execution. Recover missing inputs by inference; resolve real unknowns in one consolidated up-front pass, never trickle-asked mid-build. Scope-reduction, single-threading, permission-per-step, and partial starts on partial information are drift, not prudence — a deadline authorizes none of them. This gate is unconditional: the checkpoint is the first move, not an option to skip. Read [references/first-checkpoint.md](references/first-checkpoint.md). The measure of this skill is how few corrections a user needs to reach a correct checkpoint; the target is zero.
+
+The checkpoint must build for a vibe coder, not a developer: never plan a step, surface, or connector that requires the user to obtain, paste, or manage a token, API key, scope, environment variable, or CLI command — hide those behind one-click flows, and treat any capability that cannot be delivered without them as an architecture gap to fix. Read [references/non-developer-surface.md](references/non-developer-surface.md).
+
+These gates bind only when enforced — by the eval suite and by the product that runs these checks on output before the user ever sees it — not by this prose alone. Documented is not enforced.
 
 ## Choose the operating mode
 
@@ -59,7 +63,7 @@ Ceremony is proportional to stakes, not chosen up front. Match the friction tier
 
 - **Tier 0 — Scratch.** A single file or session, local only, no persistence, no real users, and no money — or the user explicitly asks to prototype or throw ideas at the wall. Build immediately: no Intent Lock, no Council, no Start Pack, and no seal — leave only a one-line assumption note. Keep the two non-negotiable guardrails at full strength: never send, publish, push, merge, delete, purchase, provision, or deploy without explicit authority, and never claim something is tested, deployed, or complete without evidence.
 - **Promotion gate (Tier 0 → Tier 1).** Escalate the moment persistence, shared mutable state, a real user, money movement, an external deployment, or an explicit intent to keep the code appears. On promotion, create a brief retroactive Intent Lock and run one Objector pass over the scratch work to catch drift before it becomes load-bearing.
-- **Tier 1 — Product.** New products and durable work use the full Start-mode contract above: proportional Start Pack, Worker/Objector/Aligner Council, evidence gates, and seals.
+- **Tier 1 — Product (the default for anything real).** New products and durable work use the full Start-mode contract above: proportional Start Pack, Worker/Objector/Aligner Council, evidence gates, and seals. Tier 1 is the default: if the work has a user other than the author, will persist, will ship, or is meant to be kept, it is Tier 1. Tier 0 is only for a genuine local throwaway. Applying Tier 0's "build immediately, no ceremony" to a real product is the scope-reduction-as-completion failure, not agility.
 
 Never skip a guardrail to reduce friction; skip only the ceremony a low-stakes tier does not need. When the tier is unclear, name the assumption and choose the lighter tier that still protects the non-negotiables.
 
@@ -286,6 +290,7 @@ Spend tokens on building, not narration. Emit the minimum response that fully se
 - Keep feedback local by default. User silence is not approval, event volume is not success, and no central collection occurs without explicit opt-in and destination authority.
 - Prefer the minimum sufficient output; conserve tokens for the build without dropping proof, blockers, or required approvals.
 - Timestamp durable work in UTC (ISO 8601) and stay aware of time passing — track elapsed time and durations, convert relative dates to absolute, flag stale facts, and never fabricate or backdate a time. Read [references/time-awareness.md](references/time-awareness.md).
+- Build for a vibe coder, not a developer: never hand the user a token, key, scope, env var, CLI command, or config file; hide all mechanics behind one-click flows. A capability that cannot be delivered without them is an architecture gap to fix, never a step for the user. Read [references/non-developer-surface.md](references/non-developer-surface.md).
 
 ## Representative requests
 

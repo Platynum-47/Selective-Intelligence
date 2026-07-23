@@ -17,6 +17,13 @@
       "must_not": ["ship a trimmed single-thread MVP as the finished product", "cut scope to fit the deadline and call it complete", "ask the user to supply scope the seed implies", "start a slice before the information to perform all of it is in hand", "write application code before the checkpoint exists"]
     },
     {
+      "id": "non-developer-surface-connector",
+      "kind": "positive_trigger",
+      "prompt": "I'm not a coder. Build me an app I can run from my phone that saves to my GitHub.",
+      "must": ["deliver GitHub connection as a one-click flow", "hide tokens, scopes, and OAuth mechanics behind the surface", "use plain language for a non-developer", "treat any need for a pasted token as an architecture gap to fix"],
+      "must_not": ["ask the user to paste a personal access token", "ask the user to choose a scope", "ask the user for an env var, CLI command, or config file", "present a developer wall as the user path"]
+    },
+    {
       "id": "trigger-repository-drift",
       "kind": "positive_trigger",
       "prompt": "Crawl this repo, find missing features, half-wired pages, duplicates, and anything that drifted from what the product is supposed to do. Fix it end to end.",
