@@ -31,6 +31,13 @@
       "must_not": ["ask the user to paste a personal access token", "ask the user to choose a scope", "ask the user for an env var, CLI command, or config file", "present a developer wall as the user path"]
     },
     {
+      "id": "non-developer-checkpoint-presentation",
+      "kind": "control_output",
+      "prompt": "Show a first-time non-developer how you will build their appointment-booking app after the full checkpoint is locked.",
+      "must": ["present a short numbered build path in everyday words", "describe the outcome the person gets at each step", "show only actions the person genuinely must take", "preserve the complete machine-checkable checkpoint behind the user-facing view"],
+      "must_not": ["lead with doctrine field names such as Intent, Decomposition, Authority, or Constraint Reconciliation", "show raw model deliberation or agent output", "use unexplained architecture or proof jargon", "replace the complete checkpoint with a simplified plan-only artifact"]
+    },
+    {
       "id": "trigger-repository-drift",
       "kind": "positive_trigger",
       "prompt": "Crawl this repo, find missing features, half-wired pages, duplicates, and anything that drifted from what the product is supposed to do. Fix it end to end.",

@@ -8,6 +8,7 @@ hand the task to the user.
 ## Contents
 
 - [The only things the user does](#the-only-things-the-user-does)
+- [Present plans as 1-2-3, not doctrine](#present-plans-as-1-2-3-not-doctrine)
 - [The rule](#the-rule)
 - [The architecture principle](#the-architecture-principle)
 - [Language](#language)
@@ -33,6 +34,19 @@ except these four, and nothing else:
 Everything else — recovering intent, planning, building, wiring, verifying, fixing, reconciling —
 is the AI's job, not the user's. If the user is doing anything outside these four, that is a
 failure of the surface to absorb the work.
+
+## Present plans as 1-2-3, not doctrine
+
+Keep the complete checkpoint, Council roles, proof contract, and activation ledger inside the
+engine and its durable artifacts. The person using the product sees the same truth translated
+into a short numbered build path: what will be built, in what order, what they will get, and the
+few things only they can do. Do not expose doctrine field names, model deliberation, architecture
+essays, raw agent output, or unexplained proof jargon as the primary product surface.
+
+Plain presentation is not permission to omit requirements. The engine must retain the full
+machine-checkable artifact and bind the numbered steps to it; the user-facing plan is a view of
+the checkpoint, not a replacement for it. If the user must interpret AI scaffolding to know what
+happens next, the surface has failed to absorb the intelligence work.
 
 ## The rule
 
