@@ -90,12 +90,16 @@
     "references/tool-interoperability.md",
     "references/ui-ux-and-output.md",
     "schemas/council-packet.schema.json",
+    "schemas/lane.schema.json",
     "schemas/start-pack.schema.json",
+    "lanes/si.execution.json",
+    "lanes/si.planning.json",
     "scripts/build_engine.py",
     "scripts/council.py",
     "scripts/eval.py",
     "scripts/eval_runner.py",
     "scripts/feedback.py",
+    "scripts/lane_registry.py",
     "scripts/release.py",
     "scripts/start_pack.py"
   ]
