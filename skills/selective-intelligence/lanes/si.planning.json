@@ -16,6 +16,7 @@
   ],
   "dependencies": [],
   "capabilities": ["model"],
+  "requires": ["reasoning", "structured_output"],
   "subskill": "subskills/si-planner/SKILL.md",
   "permissions": {
     "filesystem": "read",

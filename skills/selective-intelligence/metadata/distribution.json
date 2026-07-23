@@ -95,6 +95,7 @@
     "lanes/si.execution.json",
     "lanes/si.planning.json",
     "scripts/build_engine.py",
+    "scripts/capabilities.py",
     "scripts/council.py",
     "scripts/eval.py",
     "scripts/eval_runner.py",

@@ -54,7 +54,13 @@
     },
     "capabilities": {
       "type": "array",
-      "items": { "enum": ["model", "filesystem", "shell", "git", "browser", "network", "deploy", "database"] }
+      "items": { "enum": ["model", "filesystem", "shell", "git", "browser", "network", "deploy", "database"] },
+      "description": "Legacy coarse capability tags. Prefer 'requires' for resolver matching."
+    },
+    "requires": {
+      "type": "array",
+      "items": { "enum": ["reasoning", "code_generation", "structured_output", "filesystem_write", "shell_execution", "version_control", "git_service", "preview_runtime", "test_runner", "deploy_target", "database", "browser", "human"] },
+      "description": "Abstract capabilities this lane needs. The backend resolver maps these to whatever adapters the user already has — never to a hard-coded provider."
     },
     "executor": {
       "type": "string",

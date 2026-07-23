@@ -16,6 +16,7 @@
   ],
   "dependencies": ["si.planning"],
   "capabilities": ["model", "filesystem", "git"],
+  "requires": ["reasoning", "code_generation", "structured_output", "filesystem_write"],
   "subskill": "subskills/si-worker/SKILL.md",
   "permissions": {
     "filesystem": "write-scoped",
