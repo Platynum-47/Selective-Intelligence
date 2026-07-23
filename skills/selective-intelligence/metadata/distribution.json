@@ -103,6 +103,10 @@
     "scripts/lane_registry.py",
     "scripts/lane_session.py",
     "scripts/release.py",
-    "scripts/start_pack.py"
+    "scripts/start_pack.py",
+    "scripts/intent_contract.py",
+    "scripts/policy_guard.py",
+    "tests/run_instruction_fidelity_vertical.py",
+    "tests/test_production_path.py"
   ]
 }
