@@ -7,6 +7,7 @@ Use this reference when work spans sessions, agents, branches, worktrees, reposi
 - [Resume from evidence](#resume-from-evidence)
 - [Single control authority](#single-control-authority)
 - [Parallel build protocol](#parallel-build-protocol)
+- [Branch-per-slice and chat-branch pairing](#branch-per-slice-and-chat-branch-pairing)
 - [Impact and evidence invalidation](#impact-and-evidence-invalidation)
 - [Semantic change contract](#semantic-change-contract)
 - [Interrupted work and idempotent resume](#interrupted-work-and-idempotent-resume)
@@ -59,6 +60,26 @@ Before starting two builds in parallel:
 Overlapping claims block parallel implementation unless one build is explicitly subordinate and the overlap is authorized in both contracts. Passing independently is not proof that the merged result is coherent.
 
 Before merge or handoff, refresh the later build against the current baseline, rerun Start Pack validation, recompute impact, and re-lock if the merge changed a contract or assumption.
+
+## Branch-per-slice and chat-branch pairing
+
+Pair a bounded git branch (and its PR) with a bounded conversation session. Do not let one ever-growing chat thread carry every unrelated task's history, and do not let one git branch absorb work from unrelated bounded slices.
+
+Start a new branch and a new or forked chat session together when:
+
+- beginning a new Start-mode build slice;
+- resuming after compaction, interruption, or a stalled thread whose history no longer aids the task;
+- separating Worker, Objector, Aligner, or Reserve roles in Guided Council;
+- the current thread's accumulated history costs more tokens to carry than it returns in useful context.
+
+Requirements for the pairing:
+
+- name or reference the branch/PR inside the session's externalized work contract (see [model-neutral-execution.md](model-neutral-execution.md#context-window-independence)) so a resumer can locate both halves from either one;
+- load the authoritative lock, Resume Packet, and current source state into the new session before acting — a fresh or branched session still resumes from evidence per [Resume from evidence](#resume-from-evidence), never from a persuasive summary or reconstructed memory;
+- keep the branch scoped to one bounded requirement set; a PR that accumulates unrelated slices defeats the isolation this pattern provides;
+- close out the pairing explicitly: merge or abandon the branch, and mark the session concluded with its Resume Packet, rather than leaving either half ambiguously open.
+
+This pairing is a token-efficiency and drift-control technique, not a governance shortcut. It reduces the context a session must carry and the diff a reviewer must read; it does not reduce the evidence, lock, or verification requirements that apply to the work itself.
 
 ## Impact and evidence invalidation
 

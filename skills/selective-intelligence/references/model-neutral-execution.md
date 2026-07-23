@@ -187,7 +187,8 @@ For large repositories or long histories:
 - persist the externalized work contract before context pressure becomes material;
 - separate product-wide maps from task-local evidence;
 - re-read canonical intent and acceptance criteria before final validation;
-- never substitute the most recently viewed file for the whole-system truth.
+- never substitute the most recently viewed file for the whole-system truth;
+- pair a bounded git branch/PR with a bounded or forked chat session per [continuity-and-impact.md](continuity-and-impact.md#branch-per-slice-and-chat-branch-pairing) rather than carrying one thread's accumulated history across unrelated slices.
 
 When handing off between agents or models, pass the authoritative artifacts and current evidence, not a persuasive summary that hides uncertainty.
 

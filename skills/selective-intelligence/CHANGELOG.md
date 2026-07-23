@@ -12,6 +12,7 @@ All notable behavior changes to Selective Intelligence are recorded here.
 - Decoupled skill, Start Pack schema/validator, and Council protocol versions in release validation; every declared JSON Schema is now validated and packaged explicitly.
 - Preserved all prior operating modes, behavioral declarations, deterministic result history, privacy-safe feedback behavior, free CC0 distribution, and model-neutral truth standards.
 - Kept public-release claims gated on reproducible fresh-context model/client evidence; deterministic local completion alone remains a release candidate rather than proof of universal behavior.
+- Added branch-per-slice and chat-branch pairing guidance: pair a bounded git branch/PR with a bounded or forked chat session so a new bounded task starts from a clean, low-token context instead of an ever-growing thread, while still resuming from the authoritative lock and evidence rather than reconstructed memory.
 
 ## 0.1.1 - 2026-07-22
 
