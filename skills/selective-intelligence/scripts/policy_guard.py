@@ -54,6 +54,139 @@ _INSTALLERS = {
     ("poetry", "add"), ("uv", "add"), ("cargo", "install"),
 }
 _DEPLOY_WORDS = {"deploy", "publish", "release"}
+_WINDOWS_EXECUTABLE_SUFFIXES = (".exe", ".cmd", ".bat", ".com", ".ps1")
+_TRANSPARENT_WRAPPERS = {"env", "command", "nice", "nohup", "timeout", "stdbuf", "sudo", "doas"}
+
+
+def _command_basename(token: str) -> str:
+    """Return a platform-normalized command basename without Windows suffixes."""
+    name = Path(token).name.lower()
+    for suffix in _WINDOWS_EXECUTABLE_SUFFIXES:
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+def _skip_wrapper_prefix(base: str, argv: list[str]) -> list[str] | None:
+    """Return argv with one transparent wrapper removed, or None if not unwrapable."""
+    if not argv or _command_basename(argv[0]) != base:
+        return None
+    rest = argv[1:]
+
+    if base == "env":
+        index = 0
+        while index < len(rest):
+            token = rest[index]
+            if token == "--":
+                return rest[index + 1 :]
+            if token in {"-i", "-0", "-v", "-S"}:
+                index += 1
+                continue
+            if token in {"-u", "-C", "-P"}:
+                index += 2
+                continue
+            if token.startswith("-"):
+                index += 1
+                continue
+            if "=" in token and not token.startswith("-"):
+                index += 1
+                continue
+            return rest[index:]
+        return []
+
+    if base == "command":
+        index = 0
+        while index < len(rest):
+            token = rest[index]
+            if token in {"-p", "-v", "-V"}:
+                index += 1
+                continue
+            if token == "--":
+                return rest[index + 1 :]
+            if token.startswith("-"):
+                index += 1
+                continue
+            return rest[index:]
+        return []
+
+    if base == "nice":
+        index = 0
+        if index < len(rest) and rest[index] in {"-n", "--adjustment"}:
+            index += 2
+        elif index < len(rest) and re.fullmatch(r"-?\d+", rest[index] or ""):
+            index += 1
+        return rest[index:]
+
+    if base == "nohup":
+        return rest[1:] if rest[:1] == ["--"] else rest
+
+    if base == "timeout":
+        index = 0
+        while index < len(rest):
+            token = rest[index]
+            if token in {"-s", "--signal", "-k", "--kill-after"}:
+                index += 2
+                continue
+            if token in {"--preserve-status", "--foreground", "-v", "--verbose"}:
+                index += 1
+                continue
+            if token.startswith("-"):
+                index += 1
+                continue
+            # duration token then command
+            return rest[index + 1 :]
+        return []
+
+    if base == "stdbuf":
+        index = 0
+        while index < len(rest):
+            token = rest[index]
+            if token in {"-i", "-o", "-e", "--input", "--output", "--error"}:
+                index += 2
+                continue
+            if token.startswith("-"):
+                index += 1
+                continue
+            return rest[index:]
+        return []
+
+    if base in {"sudo", "doas"}:
+        index = 0
+        value_options = {
+            "-u", "-g", "-h", "-C", "-D", "-R", "-p", "-b",
+            "--user", "--group", "--host", "--chdir", "--chroot", "--prompt",
+        }
+        while index < len(rest):
+            token = rest[index]
+            if token == "--":
+                return rest[index + 1 :]
+            if token in value_options:
+                index += 2
+                continue
+            if token.startswith("-"):
+                index += 1
+                continue
+            return rest[index:]
+        return []
+
+    return None
+
+
+def _resolve_command_argv(argv: Sequence[str]) -> list[str]:
+    """Peel transparent wrappers and keep the effective command argv."""
+    current = [str(token) for token in argv]
+    # Bound unwrap depth to avoid pathological wrapper chains.
+    for _ in range(32):
+        if not current:
+            return current
+        base = _command_basename(current[0])
+        if base not in _TRANSPARENT_WRAPPERS:
+            return current
+        unwrapped = _skip_wrapper_prefix(base, current)
+        if unwrapped is None or unwrapped == current:
+            return current
+        current = list(unwrapped)
+    return current
 
 
 def _git_subcommand(argv: list[str]) -> str | None:
@@ -92,31 +225,45 @@ def _install_requested(base: str, argv: list[str]) -> bool:
     return False
 
 
+def _payload_policy_violation(payload: str) -> str | None:
+    normalized = " ".join(payload.lower().split())
+    if re.search(r"\bgit(?:\.exe)?\b.*\b(?:" + "|".join(sorted(_MUTATING_GIT)) + r")\b", normalized):
+        return "nested shell command requests Git mutation"
+    if re.search(
+        r"\b(?:npm(?:\.cmd|\.ps1)?|pnpm|yarn|pip3?|poetry|uv|cargo)\b.*\b(?:install|add)\b",
+        normalized,
+    ):
+        return "nested shell command requests dependency installation"
+    if re.search(r"\b(?:deploy|publish|release)\b", normalized):
+        return "nested shell command requests deployment or publishing"
+    return None
+
+
 def _nested_shell_violation(base: str, argv: list[str]) -> str | None:
     payload: str | None = None
     lowered = [token.lower() for token in argv]
     if base in {"sh", "bash", "zsh", "fish"} and "-c" in lowered:
         idx = lowered.index("-c")
         payload = argv[idx + 1] if idx + 1 < len(argv) else ""
-    elif base in {"cmd", "cmd.exe"} and "/c" in lowered:
+    elif base == "cmd" and "/c" in lowered:
         idx = lowered.index("/c")
         payload = " ".join(argv[idx + 1 :])
-    elif base in {"powershell", "powershell.exe", "pwsh", "pwsh.exe"}:
+    elif base in {"powershell", "pwsh"}:
         for marker in ("-command", "-c"):
             if marker in lowered:
                 idx = lowered.index(marker)
                 payload = " ".join(argv[idx + 1 :])
                 break
+    elif base in {"python", "python3", "py"} and "-c" in lowered:
+        idx = lowered.index("-c")
+        payload = argv[idx + 1] if idx + 1 < len(argv) else ""
+    elif base in {"node", "nodejs"} and ("-e" in lowered or "--eval" in lowered):
+        marker = "-e" if "-e" in lowered else "--eval"
+        idx = lowered.index(marker)
+        payload = argv[idx + 1] if idx + 1 < len(argv) else ""
     if payload is None:
         return None
-    normalized = " ".join(payload.lower().split())
-    if re.search(r"\bgit\b.*\b(?:" + "|".join(sorted(_MUTATING_GIT)) + r")\b", normalized):
-        return "nested shell command requests Git mutation"
-    if re.search(r"\b(?:npm|pnpm|yarn|pip3?|poetry|uv|cargo)\b.*\b(?:install|add)\b", normalized):
-        return "nested shell command requests dependency installation"
-    if re.search(r"\b(?:deploy|publish|release)\b", normalized):
-        return "nested shell command requests deployment or publishing"
-    return None
+    return _payload_policy_violation(payload)
 
 
 class PolicyGuard:
@@ -211,8 +358,9 @@ class PolicyGuard:
                 argv = shlex.split(argv)
             argv = [str(v) for v in argv]
             cwd = _resolved(str(action.get("cwd") or os.getcwd()))
-            base = Path(argv[0]).name.lower() if argv else ""
-            lowered = [v.lower() for v in argv]
+            effective_argv = _resolve_command_argv(argv)
+            base = _command_basename(effective_argv[0]) if effective_argv else ""
+            lowered = [v.lower() for v in effective_argv]
 
             # Never execute commands from inside a protected repo in this vertical.
             if any(_inside(cwd, root) for root in self.canonical_roots):
@@ -225,7 +373,7 @@ class PolicyGuard:
                     constraint="no state-changing actions in canonical repositories",
                 )
 
-            git_subcommand = _git_subcommand(argv) if base == "git" else None
+            git_subcommand = _git_subcommand(effective_argv) if base == "git" else None
             if self.prohibit_git_mutation and git_subcommand in _MUTATING_GIT:
                 return self._decision(
                     session_id=session_id,
@@ -236,7 +384,7 @@ class PolicyGuard:
                     constraint="no commit, push, branch, reset, clean, stash, or other Git mutation",
                 )
 
-            if self.prohibit_dependency_install and _install_requested(base, argv):
+            if self.prohibit_dependency_install and _install_requested(base, effective_argv):
                 return self._decision(
                     session_id=session_id,
                     task_id=task_id,
@@ -246,7 +394,7 @@ class PolicyGuard:
                     constraint="no dependency installation",
                 )
 
-            nested_violation = _nested_shell_violation(base, argv)
+            nested_violation = _nested_shell_violation(base, effective_argv)
             if nested_violation:
                 return self._decision(
                     session_id=session_id,
