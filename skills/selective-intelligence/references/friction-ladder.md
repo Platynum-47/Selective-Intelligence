@@ -9,6 +9,8 @@ operating modes; it does not replace [references/start-mode.md](start-mode.md) o
 The governing rule: **friction is proportional to what the work can affect, and work is
 allowed to graduate.** Reduce ceremony, never the two non-negotiable guardrails.
 
+For Selective Intelligence, if work is not a genuine throwaway local sketch, it runs as **Tier 1** through JumpStart and all related lanes.
+
 ## Contents
 
 - [The two non-negotiable guardrails](#the-two-non-negotiable-guardrails)

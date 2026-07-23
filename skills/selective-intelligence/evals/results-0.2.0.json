@@ -8,7 +8,7 @@
     "result": "pass",
     "passed": 73,
     "failed": 0,
-    "executed_controls_sha256": "1983452935a976d9137a909c3766966124f6eba3f40bd27ae8f09bb9fa5c65cc",
+    "executed_controls_sha256": "b1dac14098c8f5175ad7acb4020fcc9c50f39d185b9349fead108157c3cb4cd2",
     "scope": "Release-doctor-safe controls executed with --skip-release to avoid recursive doctor invocation.",
     "coverage": [
       "All preserved Start Pack structure, transition, authority, review, evidence, amendment, invalidation, and release controls",

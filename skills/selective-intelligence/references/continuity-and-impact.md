@@ -81,6 +81,29 @@ Requirements for the pairing:
 
 This pairing is a token-efficiency and drift-control technique, not a governance shortcut. It reduces the context a session must carry and the diff a reviewer must read; it does not reduce the evidence, lock, or verification requirements that apply to the work itself.
 
+## Prompt queue for burst prompting
+
+Fast sessions can queue many user requests while branches or contexts are still open. Use a local pre-PR queue to prevent drift:
+
+- enqueue every user request before it becomes a scoped implementation slice;
+- bind each queue item to a branch or planned PR reference;
+- allow only one active owner per `in_progress` item;
+- only remove items after the slice is completed, reviewed, and reconciled.
+
+For fast multi-agent runs, run a queue-manager check before any continuation:
+
+- use `prompt_queue.py snapshot` to save the active lane;
+- use `prompt_queue.py check --check-owner --check-branch --enforce-sequential`;
+- continue only when it says `continue`, interrupt when it says `interrupt`.
+
+Queue states are:
+
+- `queued` → `in_progress` → `fleshed` (or `discarded`)
+
+An item that is still needed must remain in the queue even when agents, sessions, or branches change.
+
+See [prompt-queue](prompt-queue.md) for command examples and cache behavior.
+
 ## Impact and evidence invalidation
 
 Maintain this trace for every included requirement:

@@ -31,6 +31,27 @@ Convert a small reliable seed into the largest truthful, useful outcome it can s
 - Ask the user only for information that is genuinely blocking or materially changes the result.
 - Keep Selective Intelligence's complete core workflow free, public, model-neutral, and unpaywalled.
 
+## Delegation-first mode for non-developers
+
+For users who are not developers, split work across dedicated AI agents instead of a single long context.
+
+Use these seven small passes in sequence, each in a separate context/agent when that orchestration is available:
+
+1. `si-intake` (one goal question, capture seed)
+2. `si-planner` (full plan lock + human actions)
+3. `si-worker` (implementation)
+4. `si-queue-manager` (watch snapshots and only interrupt on real mismatch)
+5. `si-objector` (objection pass)
+6. `si-aligner` (reconcile and gate)
+7. `si-verifier` (final plain-language handoff)
+
+Each pass must output a small packet for the next pass. User-facing language should be plain,
+easy to understand, and free of technical jargon at every pass.
+
+If the user delegates this way, the orchestrator keeps the same truth standards and only forwards packets,
+never hidden assumptions. When orchestration cannot spawn distinct agents, run the same passes in separate
+sequential contexts, and keep the queue-manager checkpoint in every continuation.
+
 Selective Inheritance is one operation inside Selective Intelligence. Inheritance chooses what to carry forward from existing work. Intelligence also discovers, reconciles, infers, synthesizes, creates, executes, and validates.
 
 ## First checkpoint (before any build)
@@ -43,9 +64,11 @@ These gates bind only when enforced — by the eval suite and by the product tha
 
 ## Choose the operating mode
 
-- **JumpStart / Guided Council:** Start or resume from an ordinary-language outcome, URL, file, note, or repository without making installation or technical choices the user's first task. If `JUMPSTART.md` was intentionally uploaded or pasted, follow its bootstrap contract. Detect continuing product or brand work and move the bounded workflow into that work's dedicated ChatGPT Project when Projects are available. Use distinct Worker, Objector, Aligner, and optional Reserve agents automatically when the active environment exposes agent spawning; otherwise use separate sequential contexts and the same portable packets. Read [references/guided-council.md](references/guided-council.md) and [references/permissions-and-budgets.md](references/permissions-and-budgets.md).
+- **JumpStart / Guided Council:** This is the full Tier 1 runtime for this system, not a pre-build-only bootstrap. Start from an ordinary-language outcome, URL, file, note, or repository and run the complete continuity-bound run: Intent Lock, queue snapshot check, Council lanes (`si-worker`, `si-objector`, `si-aligner`, `si-verifier`), and resume packet. If `JUMPSTART.md` was intentionally uploaded or pasted, follow its bootstrap contract. For this system, JumpStart is the complete default path for real work; Start mode and other operating modes are required behaviors inside it. For this product, if work has a real user, persistence, deployment intent, or shared use, that is Tier 1 and follows JumpStart by default. Detect continuing product or brand work and move the bounded workflow into that work's dedicated ChatGPT Project when Projects are available. Use distinct Worker, Objector, Aligner, and optional Reserve agents automatically when the active environment exposes agent spawning; otherwise use separate sequential contexts and the same portable packets. Read [references/guided-council.md](references/guided-council.md) and [references/permissions-and-budgets.md](references/permissions-and-budgets.md).
 - **Start:** Map a new project from intent through launch before coding. Define and lock the product, smallest complete MVP, scope boundaries, journeys, surfaces, architecture, canonical directories and ownership, database, APIs and integrations, UI/UX, security, operations, build order, acceptance gates, and change control. Preserve that contract during each build and reconcile it afterward. Read [references/start-mode.md](references/start-mode.md), [references/actual-intent-alignment.md](references/actual-intent-alignment.md), [references/architecture-reuse.md](references/architecture-reuse.md), [references/ui-ux-and-output.md](references/ui-ux-and-output.md), and the risk-triggered [references/operational-safety-gates.md](references/operational-safety-gates.md) before creating project code.
 - **Continue or resume:** Recover the current lock, source revision, partial effects, active build, claimed owners, invalidated evidence, and next safe action after interruption, compaction, handoff, branch change, or model switch. Read [references/continuity-and-impact.md](references/continuity-and-impact.md).
+- **Queue safety for burst prompts:** Add one pre-PR queue entry for each incoming request before the next bounded slice starts. Bind queue IDs to branch/PR intent and remove entries only when a slice is `fleshed` or intentionally `discarded`. See [references/prompt-queue.md](references/prompt-queue.md).
+- For multi-agent speedrun runs, use `si-queue-manager` with queue snapshots to validate owner/branch/sequential continuity before continuing.
 - **System realignment:** Crawl a repository or product to recover intent, map actual exposure, locate incomplete or conflicting implementation, remove drift, and finish the user outcome. This is the primary mode for software and vibe-coding work. Read [references/actual-intent-alignment.md](references/actual-intent-alignment.md), [references/repository-intelligence.md](references/repository-intelligence.md), [references/architecture-reuse.md](references/architecture-reuse.md), [references/ui-ux-and-output.md](references/ui-ux-and-output.md), and [references/failure-patterns-and-gates.md](references/failure-patterns-and-gates.md) before editing code.
 - **Sparse-to-complete:** Turn a URL, name, file, brief, or record into a complete profile, page, campaign, workspace, or other artifact. Follow the general operating loop below.
 - **Combined:** Use external seeds to populate or repair a software system, then validate both the imported truth and the in-product experience.

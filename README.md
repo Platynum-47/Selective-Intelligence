@@ -10,6 +10,8 @@ Published by [Platynum Standard](https://github.com/Platynum-Standard). The cano
 
 The hardest part of vibe coding is often the blank chat at the beginning. Use [JUMPSTART.md](skills/selective-intelligence/JUMPSTART.md) to remove that cold start:
 
+`JUMPSTART.md` is the full Tier 1 path for real work in this package; it runs the same intent lock, queue safety, council lanes, and proof checks you need to ship.
+
 1. Download or copy `JUMPSTART.md`.
 2. Upload or paste it into ChatGPT with whatever you have—an idea, URL, file, note, screenshot, or existing repository. If you have nothing else yet, JumpStart asks one plain-language outcome question.
 3. For continuing product or brand work, follow its prompt to create or open one dedicated ChatGPT Project. Choose project-only memory at creation when isolation is appropriate and the option is available.
@@ -43,9 +45,37 @@ Example requests:
 - “Pick this project back up from its current lock without repeating work or trusting stale evidence.”
 - “Use Selective Intelligence to audit and improve Selective Intelligence.”
 
+### Non-developer delegation (for AI teams)
+
+If your team is not developers, run this in order:
+
+1. `si-intake`
+2. `si-planner`
+3. `si-worker`
+4. `si-queue-manager`
+5. `si-objector`
+6. `si-aligner`
+7. `si-verifier`
+
+Each pass gets a short packet and passes it to the next pass. Every output is plain language
+by design.
+
+If you have multi-context agent capability, these passes can run in separate AI contexts/agents. If not, run
+them in sequence in the same context and keep passing packets.
+
+## Keep queued prompts from getting lost
+
+If prompts arrive faster than one PR/branch slice, use the local queue:
+
+- write each request into the queue first;
+- execute one bounded item at a time;
+- remove the item only when that slice is fully implemented and reconciled.
+
+This keeps context from drifting when users are spamming requests.
+
 ## Portable installation
 
-The canonical portable source is the complete [`skills/selective-intelligence/`](https://github.com/Platynum-Standard/Selective-Intelligence/tree/main/skills/selective-intelligence) directory. Keep that directory intact: `SKILL.md`, `agents/`, `references/`, `schemas/`, `scripts/`, `metadata/`, and `evals/` form one skill.
+The canonical portable source is the complete [`skills/selective-intelligence/`](https://github.com/Platynum-Standard/Selective-Intelligence/tree/main/skills/selective-intelligence) directory. Keep that directory intact: `SKILL.md`, `agents/`, `references/`, `schemas/`, `scripts/`, `metadata/`, `evals/`, and `subskills/` form one skill.
 
 With GitHub CLI 2.90.0 or newer, preview and install it with:
 

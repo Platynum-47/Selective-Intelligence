@@ -30,7 +30,7 @@ ALLOWED_TOP_LEVEL_FILES = {
     "CHANGELOG.md",
     "README.md",
 }
-ALLOWED_TOP_LEVEL_DIRS = {"agents", "evals", "metadata", "references", "schemas", "scripts"}
+ALLOWED_TOP_LEVEL_DIRS = {"agents", "evals", "metadata", "references", "schemas", "scripts", "subskills"}
 FORBIDDEN_PARTS = {".git", "__pycache__", ".pytest_cache", ".mypy_cache", "dist"}
 FORBIDDEN_NAMES = {"events.jsonl", "lock.json", ".env", ".env.local", ".env.production"}
 SECRET_PATTERNS = (

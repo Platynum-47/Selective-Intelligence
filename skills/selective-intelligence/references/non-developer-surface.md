@@ -54,6 +54,7 @@ Never require the user to obtain, paste, or manage any of:
 
 - API keys, access tokens, or secrets — including "personal access tokens", OAuth client
   secrets, or picking "repo scope";
+- keys pasted into chat or form boxes;
 - environment variables, `.env` files, or config files;
 - CLI commands, package installs, or build steps;
 - provider dashboards, developer settings, or scope/permission jargon.
