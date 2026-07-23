@@ -21,6 +21,7 @@ Project sources are continuity aids, not proof: current locks, repository state,
 
 Use it when you want an agent to:
 
+- match effort to the stakes: build a throwaway, local prototype immediately with no ceremony, then graduate to full locking, review, and proof once the work gains persistence, real users, money, or a deployment;
 - define a new product, smallest complete MVP, architecture, data, APIs, UI/UX, build order, and proof before coding;
 - resume a project across models, agents, branches, or interrupted sessions without losing the governing truth;
 - crawl a repository and reconcile intended behavior with routes, components, services, schemas, permissions, tests, deployment, and live surfaces;

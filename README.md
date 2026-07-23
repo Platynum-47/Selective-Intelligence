@@ -4,6 +4,8 @@ Selective Intelligence—formerly Selective Inheritance—is a free, portable Ag
 
 Published by [Platynum Standard](https://github.com/Platynum-Standard). The canonical source is [Platynum-Standard/Selective-Intelligence](https://github.com/Platynum-Standard/Selective-Intelligence).
 
+> **📱 Mobile IDE on the way** — a self-hosted, mobile-first code editor is in build: clone it, deploy it, open the link on your phone, and edit from anywhere.
+
 ## Start without installing anything
 
 The hardest part of vibe coding is often the blank chat at the beginning. Use [JUMPSTART.md](skills/selective-intelligence/JUMPSTART.md) to remove that cold start:
@@ -21,6 +23,7 @@ Project sources are continuity aids, not proof: current locks, repository state,
 
 Use it when you want an agent to:
 
+- match effort to the stakes: build a throwaway, local prototype immediately with no ceremony, then graduate to full locking, review, and proof once the work gains persistence, real users, money, or a deployment;
 - define a new product, smallest complete MVP, architecture, data, APIs, UI/UX, build order, and proof before coding;
 - resume a project across models, agents, branches, or interrupted sessions without losing the governing truth;
 - crawl a repository and reconcile intended behavior with routes, components, services, schemas, permissions, tests, deployment, and live surfaces;

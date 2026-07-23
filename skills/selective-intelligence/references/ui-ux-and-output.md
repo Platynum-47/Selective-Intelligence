@@ -18,6 +18,7 @@ Use this reference for every user-facing surface and every request where the out
 - [Marketing collateral rule](#marketing-collateral-rule)
 - [PDF-first document gate](#pdf-first-document-gate)
 - [UI/UX verdicts](#uiux-verdicts)
+- [Agent response economy](#agent-response-economy)
 
 ## UI/UX is product behavior
 
@@ -207,3 +208,15 @@ An attractive source file is not proof. The rendered PDF is the product to inspe
 - **Not aligned:** hierarchy, language, behavior, or output medium contradicts actual intent.
 
 Never collapse these verdicts into “looks good.”
+
+## Agent response economy
+
+The chat response is also output. Spend tokens on building, not narration.
+
+- Lead with the result and its proof. When reporting work, state repo, branch, what changed, and pass or fail; omit a restated plan or a walkthrough of steps already visible in the transcript.
+- Reference artifacts by path or link instead of pasting their contents. Quote only the lines that carry the point.
+- Do not repeat the request back, re-explain a decision the user already made, or narrate options you decided against.
+- Keep user-facing wording plain for non-developer readers; move engineering detail into model- and harness-facing files.
+- Brevity never suppresses a required disclosure. Still surface material assumptions, blockers, unverified states, and any action that needs authority — compactly.
+
+This is economy, not omission: a shorter response that hides a blocker or an unproven claim fails the truth standard, not passes the output one.

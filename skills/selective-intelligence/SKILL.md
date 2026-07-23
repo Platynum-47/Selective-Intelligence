@@ -33,6 +33,10 @@ Convert a small reliable seed into the largest truthful, useful outcome it can s
 
 Selective Inheritance is one operation inside Selective Intelligence. Inheritance chooses what to carry forward from existing work. Intelligence also discovers, reconciles, infers, synthesizes, creates, executes, and validates.
 
+## First checkpoint (before any build)
+
+Before building, creating, or finishing any product, feature, or system beyond a Tier 0 scratch throwaway, emit a locked full-scope intent checkpoint and do not start any part of the work until it is complete and information-sufficient. The checkpoint recovers the largest truthful outcome the seed supports (the prompt is a seed, not the output size), decomposes the whole product into bounded slices with proof, maps canonical reuse, sequences the build, and separates genuine authority decisions from inferred execution. Recover missing inputs by inference; resolve real unknowns in one consolidated up-front pass, never trickle-asked mid-build. Scope-reduction, single-threading, permission-per-step, and partial starts on partial information are drift, not prudence — a deadline authorizes none of them. Read [references/first-checkpoint.md](references/first-checkpoint.md). The measure of this skill is how few corrections a user needs to reach a correct checkpoint; the target is zero.
+
 ## Choose the operating mode
 
 - **JumpStart / Guided Council:** Start or resume from an ordinary-language outcome, URL, file, note, or repository without making installation or technical choices the user's first task. If `JUMPSTART.md` was intentionally uploaded or pasted, follow its bootstrap contract. Detect continuing product or brand work and move the bounded workflow into that work's dedicated ChatGPT Project when Projects are available. Use distinct Worker, Objector, Aligner, and optional Reserve agents automatically when the active environment exposes agent spawning; otherwise use separate sequential contexts and the same portable packets. Read [references/guided-council.md](references/guided-council.md) and [references/permissions-and-budgets.md](references/permissions-and-budgets.md).
@@ -48,6 +52,16 @@ Selective Inheritance is one operation inside Selective Intelligence. Inheritanc
 Before any mode, read [references/model-neutral-execution.md](references/model-neutral-execution.md) when the skill may be used by different models, agents, IDEs, or tool environments.
 Read [references/tool-interoperability.md](references/tool-interoperability.md) when a repository already uses specifications, agent rules, workflow engines, or multiple clients.
 Read [references/distribution-and-discoverability.md](references/distribution-and-discoverability.md) when publishing, packaging, mirroring, installing, or adding optional project support links.
+
+## Scale friction to consequence
+
+Ceremony is proportional to stakes, not chosen up front. Match the friction tier to what the work can actually affect, and let work graduate when its stakes rise. This keeps rapid scratchpad prototyping fast while preserving the non-negotiables. Read [references/friction-ladder.md](references/friction-ladder.md).
+
+- **Tier 0 — Scratch.** A single file or session, local only, no persistence, no real users, and no money — or the user explicitly asks to prototype or throw ideas at the wall. Build immediately: no Intent Lock, no Council, no Start Pack, and no seal — leave only a one-line assumption note. Keep the two non-negotiable guardrails at full strength: never send, publish, push, merge, delete, purchase, provision, or deploy without explicit authority, and never claim something is tested, deployed, or complete without evidence.
+- **Promotion gate (Tier 0 → Tier 1).** Escalate the moment persistence, shared mutable state, a real user, money movement, an external deployment, or an explicit intent to keep the code appears. On promotion, create a brief retroactive Intent Lock and run one Objector pass over the scratch work to catch drift before it becomes load-bearing.
+- **Tier 1 — Product.** New products and durable work use the full Start-mode contract above: proportional Start Pack, Worker/Objector/Aligner Council, evidence gates, and seals.
+
+Never skip a guardrail to reduce friction; skip only the ceremony a low-stakes tier does not need. When the tier is unclear, name the assumption and choose the lighter tier that still protects the non-negotiables.
 
 ## Guided Council execution
 
@@ -234,6 +248,16 @@ Ask before continuing only when one of these is true:
 
 When a question is needed, ask one compact question and explain the consequence. Offer a recommended default when safe.
 
+## Output economy
+
+Spend tokens on building, not narration. Emit the minimum response that fully serves the user and still honors the truth and safety rules. Read [references/ui-ux-and-output.md](references/ui-ux-and-output.md).
+
+- Lead with the result and its proof. When reporting work, state repo, branch, what changed, and pass or fail — not a restated plan or a walkthrough of steps already visible.
+- Reference artifacts by path or link instead of pasting their contents; quote only the lines that carry the point.
+- Do not repeat the request back, re-explain a decision the user already made, or narrate options you will not take.
+- Keep user-facing language plain for non-developer readers; move engineering detail to model- and harness-facing files.
+- Brevity never overrides a required guardrail: still surface material assumptions, blockers, unverified states, and actions needing authority — compactly.
+
 ## Default behaviors
 
 - Preserve brand and system separation; never import one product's doctrine into another without evidence.
@@ -260,6 +284,8 @@ When a question is needed, ask one compact question and explain the consequence.
 - Preserve required gates and verdict meanings when capabilities differ. Mark unperformed work and unverified states explicitly.
 - Keep distribution, updates, and all core behavior free. An optional support link may never change access, activation, output quality, or priority.
 - Keep feedback local by default. User silence is not approval, event volume is not success, and no central collection occurs without explicit opt-in and destination authority.
+- Prefer the minimum sufficient output; conserve tokens for the build without dropping proof, blockers, or required approvals.
+- Timestamp durable work in UTC (ISO 8601) and stay aware of time passing — track elapsed time and durations, convert relative dates to absolute, flag stale facts, and never fabricate or backdate a time. Read [references/time-awareness.md](references/time-awareness.md).
 
 ## Representative requests
 

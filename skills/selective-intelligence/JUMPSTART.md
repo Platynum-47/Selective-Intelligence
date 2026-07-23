@@ -58,6 +58,12 @@ First determine whether the user supplied an outcome in the same message or alre
 
 Infer the most useful reversible interpretation, state any material assumption briefly, and keep moving. Ask one plain-language question only when a missing answer would materially change the product, authority, sensitive-data boundary, consequential cost, or irreversible action.
 
+## Scale ceremony to stakes
+
+If the outcome is a scratch or throwaway prototype — a single file or session, local only, no persistence, no real users, and no money — build it immediately with no Intent Lock, no Council, and no Start Pack; leave only a one-line assumption note. Do not turn a fast idea into an architectural lock phase it does not need. Keep two guardrails at full strength regardless of tier: never send, publish, push, purchase, provision, or deploy without explicit authority, and never claim something is tested, deployed, or complete without evidence.
+
+Promote to the full Council the moment the work gains persistence, shared state, a real user, money movement, an external deployment, or an explicit intent to keep it. On promotion, write a brief retroactive Intent Lock and run one Objector pass over the scratch work before it scales. Read `references/friction-ladder.md` when the repository is available.
+
 ## Put durable work in the right place
 
 Detect whether this is ongoing work for an existing product or brand. Ongoing work includes repeated sessions, maintained artifacts, connected sources, customers, collaborators, a live product, or an expected return to the work.

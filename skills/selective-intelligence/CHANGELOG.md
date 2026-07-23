@@ -2,6 +2,14 @@
 
 All notable behavior changes to Selective Intelligence are recorded here.
 
+## Unreleased
+
+- Added a consequence-scaled friction ladder so ceremony matches stakes instead of an up-front mode choice: a Tier 0 scratch lane that builds throwaway, local, single-session prototypes immediately with no Intent Lock, Council, or Start Pack; an explicit Tier 0 → Tier 1 promotion gate (persistence, shared state, real users, money, external deployment, or intent to keep) that triggers a brief retroactive Intent Lock and one Objector pass; and Tier 1 keeping the full Start-mode contract unchanged. The two non-negotiable guardrails — no unauthorized external effect, no unproven completion claim — hold at every tier. Documented in `references/friction-ladder.md` with a Tier 0 short-circuit in `SKILL.md` and `JUMPSTART.md`, and surfaced in both `README.md` files.
+- Added an output-economy rule so agent responses spend tokens on building, not narration: lead with result and proof (repo, branch, what changed, pass/fail), reference artifacts by path instead of pasting them, and stop repeating the request or narrating unchosen options — without dropping proof, blockers, or required approvals. Documented in `SKILL.md` and `references/ui-ux-and-output.md`.
+- Added a **first-checkpoint gate**: any build-shaped request must emit a locked, information-complete, full-scope intent checkpoint (recovered full intent, whole-product decomposition with proof, canonical reuse map, build sequence, authority split) before any code, and must not start any part until every input needed to perform all of it is in hand. Genuine unknowns are resolved in one consolidated up-front pass, never trickle-asked. Named guards for the mined drift classes (scope-reduction-as-completion, single-thread default, ask-instead-of-recover, vibe-sprint-under-deadline, literal-ask-over-full-intent, trim-without-authority, partial-start-before-info-complete) and a correction-rounds-to-correct-checkpoint metric. Documented in `references/first-checkpoint.md`, gated in `SKILL.md`, with an eval case in `evals/evals.json`.
+- Added **time-awareness** doctrine: timestamp durable work in UTC (ISO 8601), track elapsed time and durations, convert relative dates to absolute, flag stale facts, carry wall-clock into handoffs/resumes, and never fabricate or backdate. Documented in `references/time-awareness.md`.
+- Docs plus one declared eval case; validators, schemas, `VERSION`, and the JumpStart protocol version are unchanged pending a release run. The new eval case is a declaration until reproducible model/client evidence is recorded.
+
 ## 0.2.0 - 2026-07-22
 
 - Added `JUMPSTART.md`, a zero-install cold-start contract that can be intentionally uploaded or pasted into ChatGPT with an idea, URL, file, note, or repository.

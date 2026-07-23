@@ -10,6 +10,13 @@
       "must_not": ["write application code before Definition Lock", "make the user select routine technical implementation"]
     },
     {
+      "id": "first-checkpoint-cold-build",
+      "kind": "positive_trigger",
+      "prompt": "I've got an idea for an app people build in from their phone. Just take it and build the whole thing in a day.",
+      "must": ["emit a full-scope intent checkpoint before any code", "recover the largest truthful outcome, not the literal minimal ask", "decompose the whole product into bounded slices with proof", "map canonical reuse before building anything", "reach information sufficiency before starting any slice", "separate genuine authority decisions from inferred execution", "timestamp the checkpoint in UTC"],
+      "must_not": ["ship a trimmed single-thread MVP as the finished product", "cut scope to fit the deadline and call it complete", "ask the user to supply scope the seed implies", "start a slice before the information to perform all of it is in hand", "write application code before the checkpoint exists"]
+    },
+    {
       "id": "trigger-repository-drift",
       "kind": "positive_trigger",
       "prompt": "Crawl this repo, find missing features, half-wired pages, duplicates, and anything that drifted from what the product is supposed to do. Fix it end to end.",
