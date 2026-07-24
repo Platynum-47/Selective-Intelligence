@@ -98,7 +98,10 @@ def emit_checkpoint(
         session["executionLocked"] = False
         session["mutationFrozen"] = False
         session["correctionMode"] = False
+        session["generationAuthority"] = True
     else:
+        # Proposed / interrupted / rejected checkpoints are not authority.
+        session["generationAuthority"] = False
         session["executionLocked"] = True
         session["mutationFrozen"] = True
         if status in {"interrupted", "correction_mode", "rejected"}:
@@ -156,6 +159,8 @@ def approve_checkpoint(
     checkpoint = get_checkpoint(session, checkpoint_id)
     if not checkpoint:
         raise CheckpointError("checkpoint not found")
+    if session.get("currentCheckpointId") != checkpoint_id:
+        raise CheckpointError("stale checkpoint; only currentCheckpointId may be approved")
     if checkpoint["status"] not in {"proposed", "correction_mode"}:
         raise CheckpointError(f"checkpoint cannot be approved from status {checkpoint['status']}")
     # Supersede any previously approved checkpoint.
@@ -173,6 +178,7 @@ def approve_checkpoint(
     session["executionLocked"] = False
     session["mutationFrozen"] = False
     session["correctionMode"] = False
+    session["generationAuthority"] = True
     session.setdefault("events", []).append(
         {
             "eventId": _id("evt"),
@@ -195,6 +201,8 @@ def reject_checkpoint(
     checkpoint = get_checkpoint(session, checkpoint_id)
     if not checkpoint:
         raise CheckpointError("checkpoint not found")
+    if session.get("currentCheckpointId") != checkpoint_id:
+        raise CheckpointError("stale checkpoint; only currentCheckpointId may be rejected")
     checkpoint["status"] = "rejected"
     checkpoint["user_decision"] = "reject"
     checkpoint["generation_authority"] = False
@@ -204,6 +212,7 @@ def reject_checkpoint(
     session["authorizedIntentHash"] = None
     session["executionLocked"] = True
     session["mutationFrozen"] = True
+    session["generationAuthority"] = False
     session.setdefault("events", []).append(
         {
             "eventId": _id("evt"),
@@ -376,15 +385,24 @@ def interrupt(
     disliked_checkpoint_id: str | None = None,
     actor: str = "user",
 ) -> dict[str, Any]:
-    """Atomic interruption protocol.
+    """Atomic SI session-state interruption.
 
-    Stops generation authority, prevents new tool dispatch, cancels queued work,
-    requests cancel of running/verifying/repairing, freezes FS/Git/deploy
-    mutations, marks completed effects from the rejected checkpoint as tainted,
-    captures the correction, and emits a new proposed checkpoint version.
+    Marks generationAuthority false, prevents new tool dispatch under the SI
+    session lock, cancels queued work, requests cancel of running/verifying/
+    repairing tasks in session state, freezes FS/Git/deploy mutations gated by
+    this session, marks completed effects from the rejected checkpoint as
+    tainted, captures the correction, and emits a new proposed checkpoint.
     Resume requires approval of the new checkpoint.
+
+    Claim scope: this is an atomic SI *session-state* interrupt. It does not
+    by itself prove that an external model generation stream, tool dispatcher,
+    or worker process has stopped until a product connection demonstrates that
+    those runtimes honor the session flags.
     """
-    rejected_id = disliked_checkpoint_id or session.get("authorizedCheckpointId") or session.get("currentCheckpointId")
+    current_id = session.get("currentCheckpointId")
+    if disliked_checkpoint_id and disliked_checkpoint_id != current_id:
+        raise CheckpointError("stale checkpoint; dislike applies only to currentCheckpointId")
+    rejected_id = disliked_checkpoint_id or session.get("authorizedCheckpointId") or current_id
     if rejected_id:
         checkpoint = get_checkpoint(session, rejected_id)
         if checkpoint and checkpoint["status"] in {"proposed", "approved", "correction_mode"}:

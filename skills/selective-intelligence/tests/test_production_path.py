@@ -48,6 +48,23 @@ class IntentContractTests(unittest.TestCase):
         # Must not fall through as a product ask.
         self.assertFalse(event["process_directives"])
 
+    def test_retract_survives_conflicting_model_override(self):
+        """Defect 1: structured_override must not defeat text-derived RETRACT."""
+        phrase = "i didnt say halt did i? nope."
+        for bad_op in ("ADD", "MODIFY"):
+            event = IC.classify_intent(
+                phrase,
+                event_type="correction",
+                structured_override={"operation": bad_op},
+            )
+            self.assertEqual(
+                event["operation"],
+                "RETRACT",
+                msg=f"override {bad_op} must not defeat RETRACT",
+            )
+            self.assertTrue(any("halt" in t.lower() for t in event["operation_targets"]))
+            self.assertEqual(event["product_intent"], "")
+
     def test_retract_does_not_union_into_refinements(self):
         base = IC.classify_intent("Build the status panel and keep working.")
         active = IC.merge_active_contract(None, base)
@@ -104,6 +121,30 @@ class CheckpointLockTests(unittest.TestCase):
                 BE.add_plan_tasks(session, session["pendingPlan"])
             with self.assertRaises(CP.CheckpointError):
                 LS.add_task(session, title="sneaky", queue="ready")
+
+    def test_start_project_defers_workspace_mkdir_until_approve(self):
+        """Defect 2: no filesystem write before checkpoint approval."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            os.environ["SI_SESSION_DIR"] = str(root / "sessions")
+            workspace = root / "ws-deferred"
+            self.assertFalse(workspace.exists())
+            session = BE.start_project(
+                request="Build a status panel",
+                workspace=str(workspace),
+                canonical_roots=[],
+                plan={
+                    "tasks": [
+                        {"key": "discovery", "title": "discover", "queue": "discovery", "kind": "discovery"},
+                    ]
+                },
+                auto_approve=False,
+            )
+            self.assertTrue(session["executionLocked"])
+            self.assertFalse(workspace.exists(), "workspace must not exist before approve")
+            session = BE.approve_project(session_id=session["sessionId"])
+            self.assertTrue(workspace.exists())
+            self.assertTrue(session["generationAuthority"])
 
     def test_approve_unlocks_plan_and_binds_checkpoint(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -175,6 +216,80 @@ class InterruptTests(unittest.TestCase):
             # No new side effects until re-approve.
             with self.assertRaises(BE.EngineError):
                 BE.make_worker_packet(session_id=session["sessionId"], task_id=work["taskId"])
+
+    def test_generation_authority_session_and_checkpoint_on_approve_interrupt(self):
+        """Defect 3: session generationAuthority restored on approve; false on interrupt."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            os.environ["SI_SESSION_DIR"] = str(root / "sessions")
+            session = BE.start_project(
+                request="Build a panel",
+                workspace=str(root / "ws"),
+                canonical_roots=[],
+                plan={
+                    "tasks": [
+                        {"key": "discovery", "title": "discover", "queue": "discovery", "kind": "discovery"},
+                    ]
+                },
+                auto_approve=False,
+            )
+            self.assertFalse(session["generationAuthority"])
+            proposed = CP.current_checkpoint(session)
+            self.assertFalse(proposed["generation_authority"])
+
+            session = BE.approve_project(session_id=session["sessionId"])
+            approved = CP.authorized_checkpoint(session)
+            self.assertTrue(session["generationAuthority"])
+            self.assertTrue(approved["generation_authority"])
+
+            session, result = BE.interrupt_project(
+                session_id=session["sessionId"],
+                correction="i didnt say halt did i? nope.",
+            )
+            interrupted = CP.get_checkpoint(session, result["interruptedCheckpointId"])
+            self.assertFalse(session["generationAuthority"])
+            self.assertFalse(interrupted["generation_authority"])
+            self.assertFalse(result["generationAuthority"])
+
+            session = BE.approve_project(session_id=session["sessionId"])
+            reapproved = CP.authorized_checkpoint(session)
+            self.assertTrue(session["generationAuthority"])
+            self.assertTrue(reapproved["generation_authority"])
+
+    def test_stale_checkpoint_approval_fails_closed(self):
+        """Defect 4: approving an older proposed checkpoint must fail closed."""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            os.environ["SI_SESSION_DIR"] = str(root / "sessions")
+            session = BE.start_project(
+                request="Build a panel",
+                workspace=str(root / "ws"),
+                canonical_roots=[],
+                auto_approve=False,
+            )
+            stale = CP.current_checkpoint(session)
+            # Emit a newer proposed checkpoint so stale is no longer current.
+            CP.emit_checkpoint(
+                session,
+                active_intent=session["activeIntent"],
+                evidence_basis=["newer interpretation"],
+                status="proposed",
+            )
+            LS.save_session(session)
+            self.assertNotEqual(session["currentCheckpointId"], stale["checkpoint_id"])
+            with self.assertRaises(BE.EngineError):
+                BE.approve_project(
+                    session_id=session["sessionId"],
+                    checkpoint_id=stale["checkpoint_id"],
+                )
+            with self.assertRaises(CP.CheckpointError):
+                CP.reject_checkpoint(session, stale["checkpoint_id"])
+            with self.assertRaises(BE.EngineError):
+                BE.interrupt_project(
+                    session_id=session["sessionId"],
+                    correction="nope",
+                    disliked_checkpoint_id=stale["checkpoint_id"],
+                )
 
     def test_stale_checkpoint_hash_fail_closed(self):
         with tempfile.TemporaryDirectory() as temp:

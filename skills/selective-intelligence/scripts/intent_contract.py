@@ -223,21 +223,8 @@ def _is_repudiation_utterance(text: str) -> bool:
     return any(re.search(p, lowered) for p in patterns)
 
 
-def _detect_operation(
-    raw_text: str,
-    *,
-    event_type: str,
-    structured_override: dict[str, Any] | None,
-) -> tuple[str, list[str]]:
-    if structured_override and structured_override.get("operation"):
-        op = str(structured_override["operation"]).upper()
-        if op not in INTENT_OPERATIONS:
-            raise ValueError(f"unsupported intent operation: {op}")
-        targets = list(structured_override.get("operation_targets") or [])
-        if not all(isinstance(t, str) for t in targets):
-            raise ValueError("operation_targets override must be a list of strings")
-        return op, targets
-
+def _text_derived_operation(raw_text: str, *, event_type: str) -> tuple[str, list[str]] | None:
+    """Classify operation from raw user text alone (no model override)."""
     lowered = _expand_contractions(raw_text)
     if event_type == "correction" or _is_repudiation_utterance(lowered):
         if re.search(r"\brollback\b|\brevert\s+to\b|\bundo\s+(?:the\s+)?last\b", lowered):
@@ -253,6 +240,31 @@ def _detect_operation(
         return "MODIFY", []
     if re.search(r"\breplace\b", lowered):
         return "REPLACE", []
+    return None
+
+
+def _detect_operation(
+    raw_text: str,
+    *,
+    event_type: str,
+    structured_override: dict[str, Any] | None,
+) -> tuple[str, list[str]]:
+    # Text-derived repudiation / RETRACT must survive a conflicting model override.
+    text_derived = _text_derived_operation(raw_text, event_type=event_type)
+
+    if structured_override and structured_override.get("operation"):
+        op = str(structured_override["operation"]).upper()
+        if op not in INTENT_OPERATIONS:
+            raise ValueError(f"unsupported intent operation: {op}")
+        targets = list(structured_override.get("operation_targets") or [])
+        if not all(isinstance(t, str) for t in targets):
+            raise ValueError("operation_targets override must be a list of strings")
+        if text_derived and text_derived[0] == "RETRACT" and op != "RETRACT":
+            return text_derived
+        return op, targets
+
+    if text_derived:
+        return text_derived
     return "ADD", []
 
 

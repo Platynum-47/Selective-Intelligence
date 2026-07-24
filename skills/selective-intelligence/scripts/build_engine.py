@@ -377,7 +377,7 @@ def start_project(
     as pending until the checkpoint is approved (or ``auto_approve`` for tests).
     """
     workspace_path = Path(workspace).resolve()
-    workspace_path.mkdir(parents=True, exist_ok=True)
+    # Validate paths before any filesystem write. Defer mkdir until approval.
     for root in canonical_roots:
         canonical = Path(root).resolve()
         try:
@@ -401,6 +401,7 @@ def start_project(
         if not checkpoint:
             raise EngineError("missing initial checkpoint")
         CP.approve_checkpoint(session, checkpoint["checkpoint_id"])
+        workspace_path.mkdir(parents=True, exist_ok=True)
         _apply_pending_plan(session)
     LS.save_session(session)
     return session
@@ -422,13 +423,15 @@ def approve_project(
         CP.approve_checkpoint(session, checkpoint_id)
     except CP.CheckpointError as exc:
         raise EngineError(str(exc)) from exc
+    workspace = session.get("workspace")
+    if workspace:
+        Path(workspace).resolve().mkdir(parents=True, exist_ok=True)
     if plan is not None:
         validate_plan(plan)
         session["pendingPlan"] = plan
     _apply_pending_plan(session)
     LS.save_session(session)
     return session
-
 
 def interrupt_project(
     *,
@@ -437,13 +440,17 @@ def interrupt_project(
     structured_intent: dict[str, Any] | None = None,
     disliked_checkpoint_id: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Atomic SI interrupt endpoint used by Platynum 👎 wiring.
+    """Atomic SI session-state interrupt endpoint for Platynum 👎 wiring.
 
-    Stops generation authority, cancels queued work, requests cancel of
-    running/verifying/repairing, freezes mutations, taints rejected-checkpoint
-    effects, captures correction, and emits a new proposed checkpoint.
-    Resume requires approve of the new checkpoint. Platynum live-steering UI
-    (merged PR #2) is observation-only without this backend.
+    Updates SI session state: generationAuthority false, cancel queued tasks,
+    request-cancel running/verifying/repairing, freeze mutations, taint
+    rejected-checkpoint effects, capture correction, emit a new proposed
+    checkpoint. Resume requires approve of the new checkpoint.
+
+    Claim scope: session-state interruption only until a product connection
+    proves model generation, tool dispatch, and external workers actually stop.
+    Platynum live-steering UI (merged PR #2) remains observational until it
+    calls this transaction.
     """
     session = LS.load_session(session_id)
     if not session:
