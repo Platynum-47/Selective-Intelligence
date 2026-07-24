@@ -52,12 +52,14 @@ When a model drifts from that packet, SI must catch and correct **before drift b
 
 ### Pre-action drift catch (live steering checkpoints)
 
-Cross-runtime equivalence depends on checkpoints that fire **before side effects**. Platynum-47's live steering run-loop is the product-side enforcement of this gate:
+Cross-runtime equivalence depends on checkpoints that fire **before side effects**. Platynum-47's live steering run-loop UI/gate (**PR #2, already merged**) is the product-side surface for this gate:
 
 - First checkpoint title is always **“What I understand you want.”**
 - Mutating work stays gated until Continue/Approve (or equivalent).
 - 👎 is a **hard interrupt**: cancel queued side effects, accept correction, revise understanding, then re-gate.
 - 👍 is optional feedback and must not add wait beyond the gate.
+
+That merged UI is **not** sufficient alone. Authoritative interrupt, checkpoint binding, and fail-closed stale-hash checks live in the SI runtime (`scripts/checkpoint.py`, `build_engine interrupt|approve`). Until Platynum calls that SI interrupt transaction, 👎 remains observation. See [step1-intent-control-status.md](step1-intent-control-status.md) and [platynum-interrupt-wiring.md](platynum-interrupt-wiring.md).
 
 These live steering checkpoints are the **pre-action drift-catch mechanism for model interchangeability**. They complement—and do not replace—the full-scope build artifact in [first-checkpoint.md](first-checkpoint.md). See also [guided-council.md](guided-council.md#pre-action-intent-steering).
 

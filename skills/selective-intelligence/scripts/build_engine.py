@@ -30,6 +30,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import capabilities as CAP  # noqa: E402
+import checkpoint as CP  # noqa: E402
 import lane_session as LS  # noqa: E402
 from policy_guard import PolicyDenied, PolicyGuard, guarded_run, guarded_write_text  # noqa: E402
 
@@ -106,6 +107,10 @@ def make_worker_packet(*, session_id: str, task_id: str) -> dict[str, Any]:
     session = LS.load_session(session_id)
     if not session:
         raise EngineError("session not found")
+    try:
+        CP.assert_binding(session, session["queue"].get(task_id) or {})
+    except CP.CheckpointError as exc:
+        raise EngineError(str(exc)) from exc
     task = session["queue"].get(task_id)
     if not task:
         raise EngineError("task not found")
@@ -122,11 +127,13 @@ def make_worker_packet(*, session_id: str, task_id: str) -> dict[str, Any]:
         if adapter.get("executable")
     ]
     packet = {
-        "schemaVersion": "si.worker_packet.v1",
+        "schemaVersion": "si.worker_packet.v2",
         "packetId": f"packet-{uuid.uuid4().hex}",
         "createdAt": _now(),
         "sessionId": session_id,
         "taskId": task_id,
+        "authorized_checkpoint_id": session.get("authorizedCheckpointId"),
+        "authorized_intent_hash": session.get("authorizedIntentHash"),
         "objective": session["objective"],
         "activeIntent": session["activeIntent"],
         "confirmedFacts": session.get("knownFacts", []),
@@ -137,6 +144,8 @@ def make_worker_packet(*, session_id: str, task_id: str) -> dict[str, Any]:
             "acceptanceRefs": task.get("acceptanceRefs", []),
             "status": task["status"],
             "attempts": task.get("attempts", []),
+            "authorized_checkpoint_id": task.get("authorized_checkpoint_id"),
+            "authorized_intent_hash": task.get("authorized_intent_hash"),
         },
         "permissions": {
             "writableRoots": session.get("writableRoots", []),
@@ -160,7 +169,13 @@ def make_worker_packet(*, session_id: str, task_id: str) -> dict[str, Any]:
     event = LS.record_event(
         session,
         "worker.packet_exported",
-        {"packetId": packet["packetId"], "taskId": task_id, "selectedContextFiles": len(packet["contextBundle"]["selected"])},
+        {
+            "packetId": packet["packetId"],
+            "taskId": task_id,
+            "selectedContextFiles": len(packet["contextBundle"]["selected"]),
+            "authorized_checkpoint_id": packet["authorized_checkpoint_id"],
+            "authorized_intent_hash": packet["authorized_intent_hash"],
+        },
     )
     packet["eventId"] = event["eventId"]
     LS.save_session(session)
@@ -235,11 +250,17 @@ def validate_plan(plan: dict[str, Any]) -> None:
 
 
 def add_plan_tasks(session: dict[str, Any], plan: dict[str, Any]) -> dict[str, str]:
+    try:
+        CP.require_authorized_checkpoint(session)
+    except CP.CheckpointError as exc:
+        raise EngineError(str(exc)) from exc
     validate_plan(plan)
     existing = {
         task.get("metadata", {}).get("planKey"): task["taskId"]
         for task in session["queue"].values()
         if task.get("metadata", {}).get("planKey")
+        and task.get("status") not in {"cancelled", "invalidated"}
+        and not task.get("tainted")
     }
     key_to_id = dict(existing)
     pending_specs: list[dict[str, Any]] = []
@@ -274,12 +295,26 @@ def add_plan_tasks(session: dict[str, Any], plan: dict[str, Any]) -> dict[str, s
     LS.record_event(
         session,
         "plan.tasks_added",
-        {"planId": plan.get("planId"), "taskKeys": [spec["key"] for spec in pending_specs]},
+        {
+            "planId": plan.get("planId"),
+            "taskKeys": [spec["key"] for spec in pending_specs],
+            "authorized_checkpoint_id": session.get("authorizedCheckpointId"),
+            "authorized_intent_hash": session.get("authorizedIntentHash"),
+        },
+    )
+    CP.receipt(
+        session,
+        action="plan.tasks_add",
+        details={"planId": plan.get("planId"), "taskKeys": [spec["key"] for spec in pending_specs]},
     )
     return key_to_id
 
 
 def run_discovery_tasks(session: dict[str, Any]) -> None:
+    try:
+        CP.require_authorized_checkpoint(session)
+    except CP.CheckpointError as exc:
+        raise EngineError(str(exc)) from exc
     workspace = Path(session["workspace"]).resolve()
     for task in list(LS.ready_tasks(session)):
         if task.get("metadata", {}).get("kind") != "discovery":
@@ -287,6 +322,7 @@ def run_discovery_tasks(session: dict[str, Any]) -> None:
         ok, reason = LS.transition_task(session, task["taskId"], "running")
         if not ok:
             raise EngineError(reason)
+        # Capability probe is read-only evidence collection in the disposable workspace.
         reports = CAP.inventory(probe_root=workspace)
         session["capabilityInventory"] = reports
         LS.add_fact(
@@ -303,6 +339,8 @@ def run_discovery_tasks(session: dict[str, Any]) -> None:
                 "type": "capability_discovery",
                 "timestamp": _now(),
                 "verifiedAdapterIds": [r["adapterId"] for r in reports if r["executable"]],
+                "authorized_checkpoint_id": session.get("authorizedCheckpointId"),
+                "authorized_intent_hash": session.get("authorizedIntentHash"),
             }
         )
         ok, reason = LS.transition_task(session, task["taskId"], "verifying")
@@ -315,14 +353,29 @@ def run_discovery_tasks(session: dict[str, Any]) -> None:
             raise EngineError(reason)
 
 
+def _apply_pending_plan(session: dict[str, Any], plan: dict[str, Any] | None = None) -> None:
+    pending = plan if plan is not None else session.get("pendingPlan")
+    if not pending:
+        return
+    add_plan_tasks(session, pending)
+    run_discovery_tasks(session)
+    session.pop("pendingPlan", None)
+
+
 def start_project(
     *,
     request: str,
     workspace: str,
     canonical_roots: list[str],
-    plan: dict[str, Any],
+    plan: dict[str, Any] | None = None,
     structured_intent: dict[str, Any] | None = None,
+    auto_approve: bool = False,
 ) -> dict[str, Any]:
+    """SI interprets → emit proposed checkpoint → approve → then plan/execute.
+
+    Model interpretation is a proposal, not authority. Passing ``plan`` stores it
+    as pending until the checkpoint is approved (or ``auto_approve`` for tests).
+    """
     workspace_path = Path(workspace).resolve()
     workspace_path.mkdir(parents=True, exist_ok=True)
     for root in canonical_roots:
@@ -340,27 +393,108 @@ def start_project(
         writable_roots=[str(workspace_path)],
         structured_intent=structured_intent,
     )
-    add_plan_tasks(session, plan)
-    run_discovery_tasks(session)
+    if plan is not None:
+        validate_plan(plan)
+        session["pendingPlan"] = plan
+    if auto_approve:
+        checkpoint = CP.current_checkpoint(session)
+        if not checkpoint:
+            raise EngineError("missing initial checkpoint")
+        CP.approve_checkpoint(session, checkpoint["checkpoint_id"])
+        _apply_pending_plan(session)
     LS.save_session(session)
     return session
+
+
+def approve_project(
+    *,
+    session_id: str,
+    checkpoint_id: str | None = None,
+    plan: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    session = LS.load_session(session_id)
+    if not session:
+        raise EngineError("session not found")
+    checkpoint_id = checkpoint_id or session.get("currentCheckpointId")
+    if not checkpoint_id:
+        raise EngineError("no checkpoint to approve")
+    try:
+        CP.approve_checkpoint(session, checkpoint_id)
+    except CP.CheckpointError as exc:
+        raise EngineError(str(exc)) from exc
+    if plan is not None:
+        validate_plan(plan)
+        session["pendingPlan"] = plan
+    _apply_pending_plan(session)
+    LS.save_session(session)
+    return session
+
+
+def interrupt_project(
+    *,
+    session_id: str,
+    correction: str,
+    structured_intent: dict[str, Any] | None = None,
+    disliked_checkpoint_id: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Atomic SI interrupt endpoint used by Platynum 👎 wiring.
+
+    Stops generation authority, cancels queued work, requests cancel of
+    running/verifying/repairing, freezes mutations, taints rejected-checkpoint
+    effects, captures correction, and emits a new proposed checkpoint.
+    Resume requires approve of the new checkpoint. Platynum live-steering UI
+    (merged PR #2) is observation-only without this backend.
+    """
+    session = LS.load_session(session_id)
+    if not session:
+        raise EngineError("session not found")
+    try:
+        result = CP.interrupt(
+            session,
+            correction=correction,
+            structured_intent=structured_intent,
+            disliked_checkpoint_id=disliked_checkpoint_id,
+        )
+    except CP.CheckpointError as exc:
+        raise EngineError(str(exc)) from exc
+    LS.save_session(session)
+    return session, result
 
 
 def correct_project(
     *,
     session_id: str,
     correction: str,
-    replacement_plan: dict[str, Any],
+    replacement_plan: dict[str, Any] | None = None,
     structured_intent: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    session = LS.load_session(session_id)
-    if not session:
-        raise EngineError("session not found")
-    result = LS.add_correction(session, correction, structured_intent=structured_intent)
-    add_plan_tasks(session, replacement_plan)
-    LS.save_session(session)
-    return session, result
+    """Compile a correction into a canonical interrupt state transition.
 
+    SI owns the interpretation. A caller-supplied ``replacement_plan`` is stored
+    as pending only; it is not authority and cannot execute until the new
+    checkpoint is approved.
+    """
+    session, result = interrupt_project(
+        session_id=session_id,
+        correction=correction,
+        structured_intent=structured_intent,
+    )
+    # Normalize interrupt result to the correction contract surface.
+    result = {
+        **result,
+        "invalidatedTaskIds": list(result.get("cancelledTaskIds") or []),
+        "preservedCompletedTaskIds": [],
+    }
+    if replacement_plan is not None:
+        validate_plan(replacement_plan)
+        session["pendingPlan"] = replacement_plan
+        LS.record_event(
+            session,
+            "plan.pending_after_correction",
+            {"planId": replacement_plan.get("planId"), "note": "not authoritative until checkpoint approve"},
+        )
+        LS.save_session(session)
+    return session, result
 
 def validate_worker_artifact(artifact: dict[str, Any]) -> None:
     files = artifact.get("files")
@@ -389,6 +523,10 @@ def apply_worker_artifact(
     task = session["queue"].get(task_id)
     if not task:
         raise EngineError("task not found")
+    try:
+        CP.assert_binding(session, task)
+    except CP.CheckpointError as exc:
+        raise EngineError(str(exc)) from exc
     if task["status"] not in {"ready", "repairing"}:
         raise EngineError(f"task is not executable: {task['status']}")
     ok, reason = LS.transition_task(session, task_id, "running")
@@ -420,6 +558,8 @@ def apply_worker_artifact(
                 "bytes": evidence["bytes"],
                 "producer": artifact["producer"],
                 "createdAt": evidence["timestamp"],
+                "authorized_checkpoint_id": session.get("authorizedCheckpointId"),
+                "authorized_intent_hash": session.get("authorizedIntentHash"),
             }
             LS.record_artifact(session, record)
             written.append(record)
@@ -436,11 +576,14 @@ def apply_worker_artifact(
             "producer": artifact["producer"],
             "fileArtifactIds": [record["artifactId"] for record in written],
             "timestamp": _now(),
+            "authorized_checkpoint_id": session.get("authorizedCheckpointId"),
+            "authorized_intent_hash": session.get("authorizedIntentHash"),
         }
     )
     ok, reason = LS.transition_task(session, task_id, "verifying")
     if not ok:
         raise EngineError(reason)
+    CP.receipt(session, action="filesystem.write", details={"taskId": task_id, "files": [w["relativePath"] for w in written]})
     LS.save_session(session)
     return {"session": session, "written": written}
 
@@ -473,6 +616,10 @@ def verify_task(
     task = session["queue"].get(task_id)
     if not task:
         raise EngineError("task not found")
+    try:
+        CP.assert_binding(session, task)
+    except CP.CheckpointError as exc:
+        raise EngineError(str(exc)) from exc
     if task["status"] != "verifying":
         raise EngineError(f"task is not awaiting verification: {task['status']}")
     workspace = Path(session["workspace"]).resolve()
@@ -492,9 +639,14 @@ def verify_task(
         LS.save_session(session)
         raise
     LS.record_policy_decision(session, decision)
+    evidence = dict(evidence)
+    evidence["authorized_checkpoint_id"] = session.get("authorizedCheckpointId")
+    evidence["authorized_intent_hash"] = session.get("authorizedIntentHash")
     LS.record_command(session, evidence)
     passed = evidence["exitCode"] == 0
     verification = LS.record_verification(session, task_id, evidence["evidenceId"], passed)
+    verification["authorized_checkpoint_id"] = session.get("authorizedCheckpointId")
+    verification["authorized_intent_hash"] = session.get("authorizedIntentHash")
     repair_task: dict[str, Any] | None = None
     if passed:
         ok, reason = LS.transition_task(session, task_id, "complete")
@@ -519,6 +671,7 @@ def verify_task(
                 "failureEvidenceId": evidence["evidenceId"],
             },
         )
+    CP.receipt(session, action="process.run", details={"taskId": task_id, "passed": passed})
     LS.save_session(session)
     return {
         "session": session,
@@ -565,7 +718,15 @@ def authorize_only(*, session_id: str, task_id: str, action: dict[str, Any]) -> 
         raise EngineError("session not found")
     if task_id not in session["queue"]:
         raise EngineError("task not found")
+    try:
+        CP.require_authorized_checkpoint(session)
+        CP.assert_binding(session, session["queue"][task_id])
+    except CP.CheckpointError as exc:
+        raise EngineError(str(exc)) from exc
     decision = _guard(session).authorize(session_id=session_id, task_id=task_id, action=action)
+    decision = dict(decision)
+    decision["authorized_checkpoint_id"] = session.get("authorizedCheckpointId")
+    decision["authorized_intent_hash"] = session.get("authorizedIntentHash")
     LS.record_policy_decision(session, decision)
     LS.save_session(session)
     return decision
@@ -612,6 +773,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             canonical_roots=args.canonical_root or [],
             plan=plan,
             structured_intent=structured,
+            auto_approve=bool(args.auto_approve),
         )
     except (EngineError, ValueError, OSError, json.JSONDecodeError) as exc:
         print(json.dumps({"error": str(exc), "code": "start_failed"}))
@@ -620,9 +782,53 @@ def cmd_start(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_approve(args: argparse.Namespace) -> int:
+    try:
+        plan = _load_json(args.plan) if args.plan else None
+        session = approve_project(
+            session_id=args.session,
+            checkpoint_id=args.checkpoint,
+            plan=plan,
+        )
+    except (EngineError, ValueError, OSError, json.JSONDecodeError) as exc:
+        print(json.dumps({"error": str(exc), "code": "approve_failed"}))
+        return 2
+    print(json.dumps(LS.summary(session), indent=2))
+    return 0
+
+
+def cmd_interrupt(args: argparse.Namespace) -> int:
+    try:
+        structured = _load_json(args.intent_override) if args.intent_override else None
+        session, result = interrupt_project(
+            session_id=args.session,
+            correction=args.correction,
+            structured_intent=structured,
+            disliked_checkpoint_id=args.checkpoint,
+        )
+    except (EngineError, ValueError, OSError, json.JSONDecodeError) as exc:
+        print(json.dumps({"error": str(exc), "code": "interrupt_failed"}))
+        return 2
+    print(
+        json.dumps(
+            {
+                "sessionId": session["sessionId"],
+                **{k: v for k, v in result.items() if k != "newCheckpoint"},
+                "newCheckpoint": CP.checkpoint_public_view(result["newCheckpoint"]),
+                "state": LS.global_state(session),
+                "executionLocked": session.get("executionLocked"),
+                "mutationFrozen": session.get("mutationFrozen"),
+                "queue": list(session["queue"].values()),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def cmd_correct(args: argparse.Namespace) -> int:
     try:
-        replacement = _load_json(args.plan)
+        replacement = _load_json(args.plan) if args.plan else None
         structured = _load_json(args.intent_override) if args.intent_override else None
         session, result = correct_project(
             session_id=args.session,
@@ -633,7 +839,21 @@ def cmd_correct(args: argparse.Namespace) -> int:
     except (EngineError, ValueError, OSError, json.JSONDecodeError) as exc:
         print(json.dumps({"error": str(exc), "code": "correction_failed"}))
         return 2
-    print(json.dumps({"sessionId": session["sessionId"], **result, "state": LS.global_state(session), "queue": list(session["queue"].values())}, indent=2))
+    print(
+        json.dumps(
+            {
+                "sessionId": session["sessionId"],
+                **{k: v for k, v in result.items() if k != "newCheckpoint"},
+                "newCheckpoint": CP.checkpoint_public_view(result["newCheckpoint"]) if result.get("newCheckpoint") else None,
+                "state": LS.global_state(session),
+                "executionLocked": session.get("executionLocked"),
+                "mutationFrozen": session.get("mutationFrozen"),
+                "pendingPlan": bool(session.get("pendingPlan")),
+                "queue": list(session["queue"].values()),
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -724,6 +944,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
         canonical_root = args.canonical_root
         plan = args.plan
         intent_override = None
+        auto_approve = True  # compatibility path still needs an executable session
     return cmd_start(Compat())
 
 
@@ -770,12 +991,30 @@ def main() -> int:
     start.add_argument("--canonical-root", action="append", default=[])
     start.add_argument("--plan")
     start.add_argument("--intent-override")
+    start.add_argument(
+        "--auto-approve",
+        action="store_true",
+        help="Approve the emitted checkpoint immediately (tests/compat only; production should approve explicitly)",
+    )
     start.set_defaults(func=cmd_start)
+
+    approve = sub.add_parser("approve")
+    approve.add_argument("--session", required=True)
+    approve.add_argument("--checkpoint")
+    approve.add_argument("--plan")
+    approve.set_defaults(func=cmd_approve)
+
+    interrupt_cmd = sub.add_parser("interrupt")
+    interrupt_cmd.add_argument("--session", required=True)
+    interrupt_cmd.add_argument("--correction", required=True)
+    interrupt_cmd.add_argument("--checkpoint")
+    interrupt_cmd.add_argument("--intent-override")
+    interrupt_cmd.set_defaults(func=cmd_interrupt)
 
     correct = sub.add_parser("correct")
     correct.add_argument("--session", required=True)
     correct.add_argument("--correction", required=True)
-    correct.add_argument("--plan", required=True)
+    correct.add_argument("--plan", help="Pending plan only; not authoritative until approve")
     correct.add_argument("--intent-override")
     correct.set_defaults(func=cmd_correct)
 

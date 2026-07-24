@@ -159,7 +159,7 @@ def main() -> int:
     write_json(initial_plan_path, initial_plan)
     write_json(replacement_plan_path, replacement_plan)
 
-    # Process 1: create authoritative session and complete discovery.
+    # Process 1: SI interprets and emits a proposed checkpoint (plan is pending only).
     start_args = [
         "start",
         "--request", initial_request,
@@ -170,13 +170,25 @@ def main() -> int:
         start_args += ["--canonical-root", str(root)]
     _, start_payload, start_stdout, start_stderr = run_engine(start_args, env=env)
     session_id = start_payload["sessionId"]
-    queue_start = {task["metadata"]["planKey"]: task for task in start_payload["queue"]}
+    assert start_payload["executionLocked"] is True
+    assert start_payload["queue"] == []
+    assert start_payload["currentCheckpoint"]["status"] == "proposed"
+
+    # Process 1b: approve checkpoint → pending plan becomes authoritative and discovery runs.
+    _, approved_payload, _, _ = run_engine(
+        ["approve", "--session", session_id],
+        env=env,
+    )
+    assert approved_payload["executionLocked"] is False
+    queue_start = {task["metadata"]["planKey"]: task for task in approved_payload["queue"]}
     discovery_id = queue_start["discovery"]["taskId"]
     obsolete_id = queue_start["generic_status"]["taskId"]
     assert queue_start["discovery"]["status"] == "complete"
     assert queue_start["generic_status"]["status"] == "ready"
+    assert queue_start["discovery"]["authorized_checkpoint_id"] == approved_payload["authorizedCheckpointId"]
 
-    # Process 2: load same session and apply mid-run correction before obsolete work executes.
+    # Process 2: atomic interrupt/correction. Completed work is tainted, not sacred.
+    # Replacement plan is pending only until the new checkpoint is approved.
     _, correction_payload, correction_stdout, correction_stderr = run_engine(
         [
             "correct", "--session", session_id,
@@ -185,16 +197,34 @@ def main() -> int:
         ],
         env=env,
     )
+    assert correction_payload["executionLocked"] is True
+    assert correction_payload["mutationFrozen"] is True
+    assert correction_payload["pendingPlan"] is True
+    assert obsolete_id in correction_payload["cancelledTaskIds"]
+    assert discovery_id in correction_payload["taintedEffectIds"]
+    assert correction_payload.get("preservedCompletedTaskIds", []) == []
+    queue_interrupted = {task["taskId"]: task for task in correction_payload["queue"]}
+    assert queue_interrupted[obsolete_id]["status"] == "cancelled"
+    assert queue_interrupted[discovery_id].get("tainted") is True
+
+    # Process 2b: approve revised checkpoint → pending replacement plan executes.
+    _, resumed_payload, _, _ = run_engine(
+        ["approve", "--session", session_id],
+        env=env,
+    )
+    assert resumed_payload["executionLocked"] is False
     queue_corrected = {
         task["metadata"].get("planKey", task["taskId"]): task
-        for task in correction_payload["queue"]
+        for task in resumed_payload["queue"]
+        if task.get("metadata", {}).get("planKey") and task["status"] not in {"cancelled"}
     }
     verified_task = queue_corrected["verified_status"]
     verified_id = verified_task["taskId"]
-    assert obsolete_id in correction_payload["invalidatedTaskIds"]
-    assert discovery_id in correction_payload["preservedCompletedTaskIds"]
-    assert queue_corrected["generic_status"]["status"] == "invalidated"
-    assert queue_corrected["verified_status"]["status"] == "ready"
+    assert verified_task["status"] == "ready"
+    assert verified_task["authorized_checkpoint_id"] == resumed_payload["authorizedCheckpointId"]
+    # Discovery may be re-created under the new authorized checkpoint after taint.
+    assert "discovery" in queue_corrected
+    assert queue_corrected["discovery"]["status"] == "complete"
 
     # Export a provider-neutral packet suitable for Gemini, ChatGPT, Codex, a
     # local model bridge, or manual copy/paste. This is the production handoff
@@ -327,20 +357,28 @@ def main() -> int:
     assert canonical_before == canonical_after
     assert not (canonical_roots[0] / "prohibited_probe.txt").exists()
 
-    # Confirm discovery was not rerun: exactly one capability_discovery attempt.
-    final_by_key = {
-        task["metadata"].get("planKey", task["taskId"]): task
+    # After interrupt, completed discovery from the rejected checkpoint is tainted.
+    # The re-approved checkpoint may recreate discovery; the live discovery task
+    # under the authorized checkpoint must have exactly one probe attempt.
+    final_live = [
+        task
         for task in final_payload["queue"]
-    }
+        if task.get("metadata", {}).get("planKey") == "discovery"
+        and task["status"] == "complete"
+        and not task.get("tainted")
+        and task.get("authorized_checkpoint_id") == final_payload.get("authorizedCheckpointId")
+    ]
+    assert len(final_live) == 1
     discovery_attempts = [
         attempt
-        for attempt in final_by_key["discovery"]["attempts"]
+        for attempt in final_live[0]["attempts"]
         if attempt["type"] == "capability_discovery"
     ]
     assert len(discovery_attempts) == 1
+    assert discovery_attempts[0].get("authorized_checkpoint_id") == final_payload.get("authorizedCheckpointId")
 
     evidence = {
-        "schemaVersion": "si.instruction_fidelity_evidence.v1",
+        "schemaVersion": "si.instruction_fidelity_evidence.v2",
         "classification": "PRODUCTION_MODULE_PATH_PASS",
         "qualification": (
             "The replacement canonical SI modules were exercised through separate CLI processes. "
@@ -351,16 +389,19 @@ def main() -> int:
         "sessionStore": str(session_dir / f"{session_id}.session.json"),
         "initialRequest": initial_request,
         "midRunCorrection": correction,
-        "initialQueue": list(start_payload["queue"]),
+        "initialQueue": list(approved_payload["queue"]),
         "correctedQueue": correction_payload["queue"],
-        "invalidatedTaskIds": correction_payload["invalidatedTaskIds"],
-        "preservedCompletedTaskIds": correction_payload["preservedCompletedTaskIds"],
+        "cancelledTaskIds": correction_payload["cancelledTaskIds"],
+        "taintedEffectIds": correction_payload["taintedEffectIds"],
+        "invalidatedTaskIds": correction_payload.get("invalidatedTaskIds", correction_payload["cancelledTaskIds"]),
+        "preservedCompletedTaskIds": correction_payload.get("preservedCompletedTaskIds", []),
         "workerPacket": worker_packet,
         "deniedActions": denial_records,
         "failedVerification": failed_payload["commandEvidence"],
         "passedVerification": passed_payload["commandEvidence"],
         "finalState": final_payload["state"],
         "finalQueue": final_payload["queue"],
+        "authorizedCheckpointId": final_payload.get("authorizedCheckpointId"),
         "canonicalRoots": [str(root) for root in canonical_roots],
         "canonicalManifestBefore": canonical_before,
         "canonicalManifestAfter": canonical_after,
@@ -390,6 +431,8 @@ def main() -> int:
         "evidencePath": str(evidence_path),
         "failedExitCode": failed_payload["commandEvidence"]["exitCode"],
         "passedExitCode": passed_payload["commandEvidence"]["exitCode"],
+        "cancelledTaskIds": evidence["cancelledTaskIds"],
+        "taintedEffectIds": evidence["taintedEffectIds"],
         "invalidatedTaskIds": evidence["invalidatedTaskIds"],
         "preservedCompletedTaskIds": evidence["preservedCompletedTaskIds"],
         "workerPacketId": worker_packet["packetId"],

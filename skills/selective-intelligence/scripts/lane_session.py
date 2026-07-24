@@ -12,13 +12,14 @@ from pathlib import Path
 from typing import Any
 
 from intent_contract import classify_intent, concept_tokens, merge_active_contract
+import checkpoint as CP
 
 try:
     import lane_registry as reg  # type: ignore
 except ImportError:  # The first vertical can run without registry manifests.
     reg = None
 
-SCHEMA_VERSION = "si_lane_session.v2"
+SCHEMA_VERSION = "si_lane_session.v3"
 LANE_STATUSES = {
     "pending", "ready", "running", "waiting_dependency", "verifying", "repairing",
     "human_blocked", "complete", "system_error", "cancelled",
@@ -43,8 +44,8 @@ ALLOWED_TASK_TRANSITIONS = {
     "pending": {"pending", "ready", "human_blocked", "invalidated", "cancelled"},
     "ready": {"ready", "running", "human_blocked", "invalidated", "cancelled"},
     "running": {"running", "verifying", "repairing", "failed", "human_blocked", "cancelled"},
-    "verifying": {"verifying", "complete", "repairing", "failed"},
-    "repairing": {"repairing", "running", "verifying", "complete", "failed", "human_blocked"},
+    "verifying": {"verifying", "complete", "repairing", "failed", "cancelled"},
+    "repairing": {"repairing", "running", "verifying", "complete", "failed", "human_blocked", "cancelled"},
     "human_blocked": {"human_blocked", "ready", "invalidated", "cancelled"},
     "failed": {"failed", "repairing", "ready", "invalidated", "cancelled"},
     "complete": {"complete"},
@@ -114,8 +115,10 @@ def new_session(
     canonical_roots: list[str] | None = None,
     writable_roots: list[str] | None = None,
     structured_intent: dict[str, Any] | None = None,
+    emit_initial_checkpoint: bool = True,
 ) -> dict[str, Any]:
     intent = classify_intent(objective, event_type="request", structured_override=structured_intent)
+    active = merge_active_contract(None, intent)
     session: dict[str, Any] = {
         "schemaVersion": SCHEMA_VERSION,
         "sessionId": f"si-{uuid.uuid4().hex}",
@@ -124,7 +127,7 @@ def new_session(
         "canonicalRoots": list(canonical_roots or []),
         "writableRoots": list(writable_roots or ([workspace] if workspace else [])),
         "intentEvents": [intent],
-        "activeIntent": merge_active_contract(None, intent),
+        "activeIntent": active,
         "knownFacts": [],
         "assumptions": [],
         "unknowns": [],
@@ -140,10 +143,30 @@ def new_session(
         "verificationAttempts": [],
         "humanActions": [],
         "completionEvidence": [],
+        "checkpoints": [],
+        "checkpointVersion": 0,
+        "currentCheckpointId": None,
+        "authorizedCheckpointId": None,
+        "authorizedIntentHash": None,
+        "executionLocked": True,
+        "mutationFrozen": True,
+        "correctionMode": False,
+        "generationAuthority": False,
+        "taintedEffectIds": [],
+        "actionReceipts": [],
         "createdAt": _now(),
         "updatedAt": _now(),
     }
     record_event(session, "session.created", {"intentEventId": intent["eventId"]})
+    if emit_initial_checkpoint:
+        # Model interpretation is a proposal. Execution stays locked until approve.
+        CP.emit_checkpoint(
+            session,
+            active_intent=active,
+            evidence_basis=[f"seed request: {objective}"],
+            planned_next_actions=list(active.get("process_directives") or []),
+            status="proposed",
+        )
     return session
 
 
@@ -166,8 +189,17 @@ def add_task(
     invalidation_conditions: list[str] | None = None,
     operation: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
+    require_checkpoint: bool = True,
 ) -> dict[str, Any]:
+    if require_checkpoint:
+        CP.require_authorized_checkpoint(session)
     task_id = _id("task")
+    auth = {
+        "authorized_checkpoint_id": session.get("authorizedCheckpointId"),
+        "authorized_intent_hash": session.get("authorizedIntentHash"),
+    }
+    meta = dict(metadata or {})
+    meta.update({k: v for k, v in auth.items() if v})
     task = {
         "taskId": task_id,
         "title": title,
@@ -179,16 +211,30 @@ def add_task(
         "acceptanceRefs": list(acceptance_refs or []),
         "invalidationConditions": list(invalidation_conditions or []),
         "operation": operation,
-        "metadata": dict(metadata or {}),
+        "metadata": meta,
+        "authorized_checkpoint_id": auth["authorized_checkpoint_id"],
+        "authorized_intent_hash": auth["authorized_intent_hash"],
         "attempts": [],
         "createdAt": _now(),
         "updatedAt": _now(),
         "completedAt": None,
         "invalidatedByEventId": None,
         "invalidationReason": None,
+        "tainted": False,
+        "cancelRequested": False,
     }
     session["queue"][task_id] = task
-    record_event(session, "task.created", {"taskId": task_id, "title": title, "queue": queue})
+    record_event(
+        session,
+        "task.created",
+        {
+            "taskId": task_id,
+            "title": title,
+            "queue": queue,
+            "authorized_checkpoint_id": auth["authorized_checkpoint_id"],
+            "authorized_intent_hash": auth["authorized_intent_hash"],
+        },
+    )
     recompute_task_readiness(session)
     return task
 
@@ -199,6 +245,12 @@ def transition_task(session: dict[str, Any], task_id: str, status: str, *, reaso
         return False, "task not found"
     if status not in TASK_STATUSES:
         return False, f"invalid task status: {status}"
+    # Side-effecting progress requires an authorized checkpoint binding.
+    if status in {"running", "verifying", "repairing"} and not session.get("correctionMode"):
+        try:
+            CP.assert_binding(session, task)
+        except CP.CheckpointError as exc:
+            return False, str(exc)
     current = task["status"]
     if status not in ALLOWED_TASK_TRANSITIONS.get(current, set()):
         return False, f"illegal task transition {current} -> {status}"
@@ -235,52 +287,33 @@ def add_correction(
     *,
     structured_intent: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    correction = classify_intent(raw_text, event_type="correction", structured_override=structured_intent)
-    session["intentEvents"].append(correction)
-    session["activeIntent"] = merge_active_contract(session.get("activeIntent"), correction)
-    event = record_event(session, "intent.corrected", {"intentEventId": correction["eventId"], "rawText": raw_text}, actor="user")
+    """Apply a user correction through the atomic interrupt protocol.
 
-    correction_tokens = concept_tokens(
-        correction.get("superseded_concepts", [])
-        + correction.get("prohibitions", [])
-        + correction.get("acceptance_criteria", [])
+    Does not skip running/verifying/repairing. Completed work from the rejected
+    interpretation is marked tainted (not auto-preserved as sacred). SI compiles
+    the correction into a canonical intent-operation state transition; callers
+    do not supply replacement authority.
+    """
+    result = CP.compile_correction_transition(
+        session,
+        raw_text,
+        structured_intent=structured_intent,
     )
-    invalidated: list[str] = []
-    preserved: list[str] = []
-    for task in session["queue"].values():
-        if task["status"] == "complete":
-            preserved.append(task["taskId"])
-            continue
-        if task["status"] not in {"pending", "ready", "human_blocked", "failed"}:
-            continue
-        conditions = list(task.get("invalidationConditions", [])) + list(task.get("tags", []))
-        condition_tokens = concept_tokens(conditions)
-        overlap = sorted(correction_tokens & condition_tokens)
-        phrase_match = any(
-            cond.lower() in raw_text.lower()
-            for cond in task.get("invalidationConditions", [])
-            if len(cond.strip()) >= 4
-        )
-        if overlap or phrase_match:
-            previous = task["status"]
-            task["status"] = "invalidated"
-            task["invalidatedByEventId"] = correction["eventId"]
-            task["invalidationReason"] = (
-                f"superseded by correction; matched concepts: {', '.join(overlap) or 'explicit condition'}"
-            )
-            task["updatedAt"] = _now()
-            invalidated.append(task["taskId"])
-            record_event(
-                session,
-                "task.invalidated",
-                {"taskId": task["taskId"], "from": previous, "intentEventId": correction["eventId"], "overlap": overlap},
-            )
-    recompute_task_readiness(session)
-    event["payload"].update({"invalidatedTaskIds": invalidated, "preservedCompletedTaskIds": preserved})
+    # Preserve legacy keys while exposing interrupt semantics.
     return {
-        "intentEvent": correction,
-        "invalidatedTaskIds": invalidated,
-        "preservedCompletedTaskIds": preserved,
+        "intentEvent": result["intentEvent"],
+        "operation": result["operation"],
+        "invalidatedTaskIds": result["cancelledTaskIds"],
+        "cancelledTaskIds": result["cancelledTaskIds"],
+        "cancelRequestedTaskIds": result["cancelRequestedTaskIds"],
+        "taintedEffectIds": result["taintedEffectIds"],
+        "preservedCompletedTaskIds": [],  # completed work is tainted, not sacred
+        "removed": result["removed"],
+        "retained": result["retained"],
+        "changed": result["changed"],
+        "newCheckpoint": result["newCheckpoint"],
+        "resumeRequiresApproval": True,
+        "mutationFrozen": True,
     }
 
 
@@ -452,6 +485,8 @@ def global_state(session: dict[str, Any]) -> str:
 
 
 def summary(session: dict[str, Any]) -> dict[str, Any]:
+    current = CP.current_checkpoint(session)
+    authorized = CP.authorized_checkpoint(session)
     return {
         "sessionId": session["sessionId"],
         "state": global_state(session),
@@ -461,6 +496,14 @@ def summary(session: dict[str, Any]) -> dict[str, Any]:
         "knownFacts": session["knownFacts"],
         "capabilityInventory": session["capabilityInventory"],
         "humanActions": session_human_actions(session),
+        "executionLocked": session.get("executionLocked", True),
+        "mutationFrozen": session.get("mutationFrozen", True),
+        "correctionMode": session.get("correctionMode", False),
+        "authorizedCheckpointId": session.get("authorizedCheckpointId"),
+        "authorizedIntentHash": session.get("authorizedIntentHash"),
+        "currentCheckpoint": CP.checkpoint_public_view(current) if current else None,
+        "authorizedCheckpoint": CP.checkpoint_public_view(authorized) if authorized else None,
+        "taintedEffectIds": list(session.get("taintedEffectIds") or []),
     }
 
 
