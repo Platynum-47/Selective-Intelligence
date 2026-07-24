@@ -1,0 +1,27 @@
+{
+  "runId": "2026-07-23",
+  "status": "provisional — requires Thomas's acceptance",
+  "notTheFirstExecutable": [
+    "A lane registry exists.",
+    "A session schema exists.",
+    "Infrastructure compiles / unit-tests pass.",
+    "Code is committed."
+  ],
+  "theFirstExecutable": "The smallest real vertical slice proving: minimal intent -> complete-enough understanding -> machine fact discovery -> only-necessary questions -> correct dependency-aware queues -> execution with already-available capabilities -> verification -> finished result OR exact human-only blocker.",
+  "acceptanceSteps": [
+    {"n": 1, "must": "A user provides minimal project intent (one short sentence)."},
+    {"n": 2, "must": "SI inspects the project, repos, prior decisions, installed agents/CLIs, local runtimes, deterministic tools, accounts, and credentials-by-reference."},
+    {"n": 3, "must": "SI produces an explicit model: known facts, unknown facts, contradictions, reversible assumptions, irreversible decisions, missing capabilities."},
+    {"n": 4, "must": "SI discovers every machine-discoverable fact BEFORE asking the user."},
+    {"n": 5, "must": "SI asks only for information/action it cannot safely obtain or infer."},
+    {"n": 6, "must": "SI compiles a dependency-correct project/lane graph and derives execution queues from intent+facts+acceptance+dependencies."},
+    {"n": 7, "must": "SI executes all runnable work using capabilities the user already has (no global key requirement)."},
+    {"n": 8, "must": "A blocked lane does not stop unrelated runnable work."},
+    {"n": 9, "must": "SI verifies produced outputs and repairs failed verification."},
+    {"n": 10, "must": "A new user instruction triggers intent reconciliation + downstream impact analysis; invalidated work is removed; unaffected completed work is preserved."},
+    {"n": 11, "must": "SI continues until the verified product is complete OR genuine human action is the only remaining blocker; the same session resumes after human actions."},
+    {"n": 12, "must": "Platynum-47 exposes the truthful state of understanding, queues, lanes, artifacts, execution, verification, blockers, and final output (no fabricated percentages)."}
+  ],
+  "provingCandidate": "TBD with Thomas — a small, real, currently-unfinished Platynum-47 feature implemented THROUGH SI from a minimal prompt, from a recorded baseline, without manually implementing the target. Requires a reasoning adapter available (F006): install/authenticate an agent CLI or local model, or the managed path.",
+  "evidenceRequired": ["baseline SHA", "exact prompt", "SI session id", "discovered facts + questions asked", "derived queue", "files changed by lane", "build/test commands + exit codes", "preview verification", "human interventions (should be zero for the target feature)"]
+}

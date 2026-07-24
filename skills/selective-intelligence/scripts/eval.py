@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -654,7 +655,8 @@ def control_tests(include_release: bool = True) -> list[str]:
             ],
             {0},
         )
-        if shared_feedback.stat().st_mode & 0o777 != 0o755:
+        # POSIX permission bits are only meaningful on POSIX; chmod is a no-op on Windows.
+        if os.name == "posix" and shared_feedback.stat().st_mode & 0o777 != 0o755:
             raise AssertionError("custom feedback store changed its parent directory permissions")
         managed_store = root / "managed-project" / ".selective-intelligence" / "feedback" / "events.jsonl"
         run(
@@ -673,7 +675,7 @@ def control_tests(include_release: bool = True) -> list[str]:
             ],
             {0},
         )
-        if managed_store.parent.stat().st_mode & 0o777 != 0o700:
+        if os.name == "posix" and managed_store.parent.stat().st_mode & 0o777 != 0o700:
             raise AssertionError("managed feedback directory was not protected")
         if not (managed_store.parent / ".gitignore").is_file():
             raise AssertionError("managed feedback directory lacks its ignore control")
@@ -683,27 +685,33 @@ def control_tests(include_release: bool = True) -> list[str]:
         outside.mkdir()
         linked_project = root / "linked-project"
         linked_project.mkdir()
-        (linked_project / ".selective-intelligence").symlink_to(outside, target_is_directory=True)
-        linked_store = linked_project / ".selective-intelligence" / "feedback" / "events.jsonl"
-        run(
-            [
-                sys.executable,
-                feedback,
-                "record",
-                "--store",
-                str(linked_store),
-                "--task-id",
-                str(uuid.uuid4()),
-                "--event",
-                "task_started",
-                "--cause",
-                "unknown",
-            ],
-            {2},
-        )
-        if linked_store.exists():
-            raise AssertionError("feedback escaped through a symlinked ancestor")
-        passed.append("feedback rejects symlinked ancestor paths")
+        try:
+            (linked_project / ".selective-intelligence").symlink_to(outside, target_is_directory=True)
+        except OSError:
+            # Windows blocks symlink creation without privilege; the symlink-rejection
+            # behavior is still verified on POSIX where the test can create one.
+            passed.append("feedback symlink rejection skipped (platform cannot create symlinks)")
+        else:
+            linked_store = linked_project / ".selective-intelligence" / "feedback" / "events.jsonl"
+            run(
+                [
+                    sys.executable,
+                    feedback,
+                    "record",
+                    "--store",
+                    str(linked_store),
+                    "--task-id",
+                    str(uuid.uuid4()),
+                    "--event",
+                    "task_started",
+                    "--cause",
+                    "unknown",
+                ],
+                {2},
+            )
+            if linked_store.exists():
+                raise AssertionError("feedback escaped through a symlinked ancestor")
+            passed.append("feedback rejects symlinked ancestor paths")
 
     council_script = SKILL_ROOT / "scripts" / "council.py"
     if not council_script.is_file():

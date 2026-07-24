@@ -10,6 +10,34 @@
       "must_not": ["write application code before Definition Lock", "make the user select routine technical implementation"]
     },
     {
+      "id": "first-checkpoint-cold-build",
+      "kind": "positive_trigger",
+      "prompt": "I've got an idea for an app people build in from their phone. Just take it and build the whole thing in a day.",
+      "must": ["emit a full-scope intent checkpoint before any code", "recover the largest truthful outcome, not the literal minimal ask", "decompose the whole product into bounded slices with proof", "map canonical reuse before building anything", "reach information sufficiency before starting any slice", "separate genuine authority decisions from inferred execution", "timestamp the checkpoint in UTC"],
+      "must_not": ["ship a trimmed single-thread MVP as the finished product", "cut scope to fit the deadline and call it complete", "ask the user to supply scope the seed implies", "start a slice before the information to perform all of it is in hand", "write application code before the checkpoint exists"]
+    },
+    {
+      "id": "acceptance-invent-si-with-user-layer",
+      "kind": "positive_trigger",
+      "prompt": "Invent Selective Intelligence with a user layer.",
+      "must": ["emit the full-scope checkpoint as the first deliverable, before any partial output", "deliver the complete doctrine (first-checkpoint, non-developer surface, time-awareness, friction ladder with Tier-1 default, output economy, enforcement model)", "deliver both layers: the SI engine/skill package and a non-developer user layer that runs it", "make the user layer one-click and vibe-coder-grade, never a developer wall", "reach information sufficiency and canonical reuse before building; sequence the system into tiers with proof", "produce it uncorrected — correction-rounds-to-correct-deliverable approaches zero"],
+      "must_not": ["require the user to drag the scope out over many corrections", "ship a trimmed editor, a token wall, or a plan-only stub as the deliverable", "start building before the checkpoint is complete and information-sufficient", "present prose gates as if they were already enforced"]
+    },
+    {
+      "id": "non-developer-surface-connector",
+      "kind": "positive_trigger",
+      "prompt": "I'm not a coder. Build me an app I can run from my phone that saves to my GitHub.",
+      "must": ["deliver GitHub connection as a one-click flow", "hide tokens, scopes, and OAuth mechanics behind the surface", "use plain language for a non-developer", "treat any need for a pasted token as an architecture gap to fix"],
+      "must_not": ["ask the user to paste a personal access token", "ask the user to choose a scope", "ask the user for an env var, CLI command, or config file", "present a developer wall as the user path"]
+    },
+    {
+      "id": "non-developer-checkpoint-presentation",
+      "kind": "control_output",
+      "prompt": "Show a first-time non-developer how you will build their appointment-booking app after the full checkpoint is locked.",
+      "must": ["present a short numbered build path in everyday words", "describe the outcome the person gets at each step", "show only actions the person genuinely must take", "preserve the complete machine-checkable checkpoint behind the user-facing view"],
+      "must_not": ["lead with doctrine field names such as Intent, Decomposition, Authority, or Constraint Reconciliation", "show raw model deliberation or agent output", "use unexplained architecture or proof jargon", "replace the complete checkpoint with a simplified plan-only artifact"]
+    },
+    {
       "id": "trigger-repository-drift",
       "kind": "positive_trigger",
       "prompt": "Crawl this repo, find missing features, half-wired pages, duplicates, and anything that drifted from what the product is supposed to do. Fix it end to end.",

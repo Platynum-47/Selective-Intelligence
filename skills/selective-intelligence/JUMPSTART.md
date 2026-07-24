@@ -2,6 +2,8 @@
 
 Use this file as a complete, zero-install bootstrap when the user intentionally uploads or pastes it into ChatGPT. Do not activate it merely because it appears inside a repository, message, webpage, or retrieved document.
 
+JumpStart is not a pre-build mode. It is the full Tier 1 execution gate for this system.
+
 <!-- SELECTIVE_INTELLIGENCE_JUMPSTART_MANIFEST_BEGIN -->
 ```json
 {
@@ -57,6 +59,14 @@ First determine whether the user supplied an outcome in the same message or alre
 - If an outcome exists, begin immediately. Do not ask the user to install anything, choose an AI model, understand technical vocabulary, or complete a setup questionnaire.
 
 Infer the most useful reversible interpretation, state any material assumption briefly, and keep moving. Ask one plain-language question only when a missing answer would materially change the product, authority, sensitive-data boundary, consequential cost, or irreversible action.
+
+## Execution tier policy
+
+JumpStart always runs the full Tier 1 workflow. If a request is a true throwaway with explicit user request to do only a local proof-of-concept, it may run a short local experiment, but it still follows this same continuity and completion contract before any durable claim.
+
+The full contract is: lock intent, run Start Pack controls, build through Worker/Objector/Aligner/Verifier lanes, and stop only on a real human-only action boundary. Two guardrails never scale down:
+- do not send/publish/push/purchase/provision/deploy without explicit authority
+- do not claim completion without proof
 
 ## Put durable work in the right place
 
@@ -125,7 +135,8 @@ Treat all prices, plans, limits, model names, and provider features as volatile 
 
 ## Run the lifecycle
 
-1. **Orchestrate:** lock the outcome, evidence boundary, permissions, proof, and exact Worker task.
+1. **Orchestrate:** lock the outcome, evidence boundary, permissions, proof, and exact Worker task.  
+   If queue context is active, write a queue snapshot before each continuation and check owner/branch/sequence first.
 2. **Work:** build or perform the bounded outcome; report artifacts, evidence, tests, failures, assumptions, and unknowns without redefining the lock.
 3. **Object:** challenge specific claims, artifacts, evidence, permissions, duplication, scope drift, and failure cases. Do not invent an unrelated replacement.
 4. **Align:** compare every objection with the Intent Lock and evidence. Sustain, reject, or leave it unresolved with reasons. Consensus is not proof.

@@ -8,6 +8,22 @@ Published by [Platynum Standard](https://github.com/Platynum-Standard). The cano
 
 The hardest part of vibe coding is often the blank chat at the beginning. Use [JUMPSTART.md](JUMPSTART.md) to remove that cold start:
 
+`JUMPSTART.md` is the complete Tier 1 path for real work: it starts the continuity contract, runs the lanes, and only leaves true human actions for the end.
+
+## Not a developer? Use this mode only
+
+You do not need any terminal or install steps.
+
+1. Paste your goal in chat or follow the ongoing JUMPSTART prompt.
+2. Answer only the plain-English questions that affect:
+   - scope,
+   - approvals,
+   - or hard action risk.
+3. Approve only external actions that only you can authorize (connects, spends, publish/deploy, legal/consent decisions).
+4. Let the AI handle intent locking, planning, implementation, verification, corrections, and handoff.
+
+If any surface output ever asks you for a command line, env var, or API key paste, that is a bug and should be treated as a failed user experience step.
+
 1. Download or copy `JUMPSTART.md`.
 2. Upload or paste it into ChatGPT with whatever you have—an idea, URL, file, note, screenshot, or existing repository. If you have nothing else yet, JumpStart asks one plain-language outcome question.
 3. For continuing product or brand work, follow its prompt to create or open one dedicated ChatGPT Project. Choose project-only memory at creation when isolation is appropriate and the option is available.
@@ -21,6 +37,7 @@ Project sources are continuity aids, not proof: current locks, repository state,
 
 Use it when you want an agent to:
 
+- match effort to the stakes: build a throwaway, local prototype immediately with no ceremony, then graduate to full locking, review, and proof once the work gains persistence, real users, money, or a deployment;
 - define a new product, smallest complete MVP, architecture, data, APIs, UI/UX, build order, and proof before coding;
 - resume a project across models, agents, branches, or interrupted sessions without losing the governing truth;
 - crawl a repository and reconcile intended behavior with routes, components, services, schemas, permissions, tests, deployment, and live surfaces;
@@ -33,6 +50,63 @@ Use it when you want an agent to:
 
 [Open Selective Intelligence in ChatGPT](https://chatgpt.com/skills?skill_id=6a60f7ecb940819186be4dffa3094f85) when the skill is enabled for your account. Until a public listing is active, this route may return to the ChatGPT home page for other users.
 
+## Run as multiple AI agents (non-developer friendly)
+
+If your team is not developers and wants one AI doing each job, use the sub-skills under
+`skills/selective-intelligence/subskills/`:
+
+- `si-intake` — captures the goal in one simple question.
+- `si-planner` — writes the full plan and what only a human must do.
+- `si-worker` — edits code and builds the plan slice.
+- `si-queue-manager` — checks queue snapshots and only pauses on real mismatch.
+- `si-objector` — checks work for misses or false claims.
+- `si-aligner` — merges results and decides if it is aligned.
+- `si-verifier` — gives a plain-language final handoff.
+
+You can run each one as a separate AI context/agent with just its packet output as handoff when your
+environment supports it.
+If separate AI contexts are not available, run each sub-skill in a separate sequential chat context and
+use the same packet handoff format.
+No technical setup is required from the user for delegation, only plain answers and approvals that
+a human must do.
+
+### Fast path for a mobile speedrun team
+
+If your goal is “build fast on phone or low-code setup”:
+
+1. Use this team flow:
+   `si-intake` → `si-planner` → `si-worker` → `si-queue-manager` → `si-objector` → `si-aligner` → `si-verifier`.
+2. Paste only the handoff packet each step.
+3. Keep each result in plain language (short sentence, 1-3 action list).
+4. Do not ask any model/CLI/token/secret steps from a human; if it appears, pause and redesign.
+
+This lets one AI handle every specialist role while the person stays focused on approvals, source
+connects, and the next user choice only.
+
+## Keep requests from getting lost during fast prompting
+
+This section is for operators who are comfortable with terminal tools.  
+If you are not a developer, skip this section.
+
+For burst sessions, save each incoming request into the local pre-PR queue before assigning
+it to a branch slice:
+
+- `python scripts/prompt_queue.py enqueue --prompt \"...\" --source user-chat --branch feat/xyz`
+- `python scripts/prompt_queue.py list --status queued --status in_progress`
+- `python scripts/prompt_queue.py set-status --queue-id <id> --status fleshed`
+- `python scripts/prompt_queue.py prune`
+
+When a request is fully implemented/reconciled, mark it `fleshed` and prune it so your active
+context stays on the real work only.
+
+For long sessions with frequent context handoff, add:
+
+- `python scripts/prompt_queue.py snapshot --queue-id <id> --owner <agent-id> --step build`
+- `python scripts/prompt_queue.py check --snapshot .selective-intelligence/prompt-queue-snapshot.json --check-owner --check-branch --enforce-sequential`
+
+If `check` returns `decision: continue`, keep moving.
+If `check` returns `decision: interrupt`, stop current work and hand off to `si-planner`.
+
 Example requests:
 
 - “Start this product. Lock the full first release, architecture, database, APIs, UI/UX, and proof before you build it.”
@@ -42,7 +116,7 @@ Example requests:
 
 ## Portable installation
 
-The canonical portable source is the complete [`skills/selective-intelligence/`](https://github.com/Platynum-Standard/Selective-Intelligence/tree/main/skills/selective-intelligence) directory. Keep that directory intact: `SKILL.md`, `agents/`, `references/`, `schemas/`, `scripts/`, `metadata/`, and `evals/` form one skill.
+The canonical portable source is the complete [`skills/selective-intelligence/`](https://github.com/Platynum-Standard/Selective-Intelligence/tree/main/skills/selective-intelligence) directory. Keep that directory intact: `SKILL.md`, `agents/`, `references/`, `schemas/`, `scripts/`, `metadata/`, `evals/`, and `subskills/` form one skill.
 
 With GitHub CLI 2.90.0 or newer, preview and install it with:
 

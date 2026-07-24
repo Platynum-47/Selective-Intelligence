@@ -4,9 +4,13 @@ Selective Intelligence—formerly Selective Inheritance—is a free, portable Ag
 
 Published by [Platynum Standard](https://github.com/Platynum-Standard). The canonical source is [Platynum-Standard/Selective-Intelligence](https://github.com/Platynum-Standard/Selective-Intelligence).
 
+> **📱 Mobile IDE on the way** — a self-hosted, mobile-first code editor is in build: clone it, deploy it, open the link on your phone, and edit from anywhere.
+
 ## Start without installing anything
 
 The hardest part of vibe coding is often the blank chat at the beginning. Use [JUMPSTART.md](skills/selective-intelligence/JUMPSTART.md) to remove that cold start:
+
+`JUMPSTART.md` is the full Tier 1 path for real work in this package; it runs the same intent lock, queue safety, council lanes, and proof checks you need to ship.
 
 1. Download or copy `JUMPSTART.md`.
 2. Upload or paste it into ChatGPT with whatever you have—an idea, URL, file, note, screenshot, or existing repository. If you have nothing else yet, JumpStart asks one plain-language outcome question.
@@ -21,6 +25,7 @@ Project sources are continuity aids, not proof: current locks, repository state,
 
 Use it when you want an agent to:
 
+- match effort to the stakes: build a throwaway, local prototype immediately with no ceremony, then graduate to full locking, review, and proof once the work gains persistence, real users, money, or a deployment;
 - define a new product, smallest complete MVP, architecture, data, APIs, UI/UX, build order, and proof before coding;
 - resume a project across models, agents, branches, or interrupted sessions without losing the governing truth;
 - crawl a repository and reconcile intended behavior with routes, components, services, schemas, permissions, tests, deployment, and live surfaces;
@@ -40,9 +45,37 @@ Example requests:
 - “Pick this project back up from its current lock without repeating work or trusting stale evidence.”
 - “Use Selective Intelligence to audit and improve Selective Intelligence.”
 
+### Non-developer delegation (for AI teams)
+
+If your team is not developers, run this in order:
+
+1. `si-intake`
+2. `si-planner`
+3. `si-worker`
+4. `si-queue-manager`
+5. `si-objector`
+6. `si-aligner`
+7. `si-verifier`
+
+Each pass gets a short packet and passes it to the next pass. Every output is plain language
+by design.
+
+If you have multi-context agent capability, these passes can run in separate AI contexts/agents. If not, run
+them in sequence in the same context and keep passing packets.
+
+## Keep queued prompts from getting lost
+
+If prompts arrive faster than one PR/branch slice, use the local queue:
+
+- write each request into the queue first;
+- execute one bounded item at a time;
+- remove the item only when that slice is fully implemented and reconciled.
+
+This keeps context from drifting when users are spamming requests.
+
 ## Portable installation
 
-The canonical portable source is the complete [`skills/selective-intelligence/`](https://github.com/Platynum-Standard/Selective-Intelligence/tree/main/skills/selective-intelligence) directory. Keep that directory intact: `SKILL.md`, `agents/`, `references/`, `schemas/`, `scripts/`, `metadata/`, and `evals/` form one skill.
+The canonical portable source is the complete [`skills/selective-intelligence/`](https://github.com/Platynum-Standard/Selective-Intelligence/tree/main/skills/selective-intelligence) directory. Keep that directory intact: `SKILL.md`, `agents/`, `references/`, `schemas/`, `scripts/`, `metadata/`, `evals/`, and `subskills/` form one skill.
 
 With GitHub CLI 2.90.0 or newer, preview and install it with:
 

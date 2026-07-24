@@ -31,13 +31,44 @@ Convert a small reliable seed into the largest truthful, useful outcome it can s
 - Ask the user only for information that is genuinely blocking or materially changes the result.
 - Keep Selective Intelligence's complete core workflow free, public, model-neutral, and unpaywalled.
 
+## Delegation-first mode for non-developers
+
+For users who are not developers, split work across dedicated AI agents instead of a single long context.
+
+Use these seven small passes in sequence, each in a separate context/agent when that orchestration is available:
+
+1. `si-intake` (one goal question, capture seed)
+2. `si-planner` (full plan lock + human actions)
+3. `si-worker` (implementation)
+4. `si-queue-manager` (watch snapshots and only interrupt on real mismatch)
+5. `si-objector` (objection pass)
+6. `si-aligner` (reconcile and gate)
+7. `si-verifier` (final plain-language handoff)
+
+Each pass must output a small packet for the next pass. User-facing language should be plain,
+easy to understand, and free of technical jargon at every pass.
+
+If the user delegates this way, the orchestrator keeps the same truth standards and only forwards packets,
+never hidden assumptions. When orchestration cannot spawn distinct agents, run the same passes in separate
+sequential contexts, and keep the queue-manager checkpoint in every continuation.
+
 Selective Inheritance is one operation inside Selective Intelligence. Inheritance chooses what to carry forward from existing work. Intelligence also discovers, reconciles, infers, synthesizes, creates, executes, and validates.
+
+## First checkpoint (before any build)
+
+Before building, creating, or finishing any product, feature, or system beyond a Tier 0 scratch throwaway, emit a locked full-scope intent checkpoint and do not start any part of the work until it is complete and information-sufficient. The checkpoint recovers the largest truthful outcome the seed supports (the prompt is a seed, not the output size), decomposes the whole product into bounded slices with proof, maps canonical reuse, sequences the build, separates genuine authority decisions from inferred execution, reconciles the stated constraints against each other so hidden contradictions surface before building (e.g., "non-developer" vs "no backend"), and enumerates up front every human-layer activation step the outcome will need to go live (keys, OAuth apps, deploys) rather than discovering them mid-build. Recover missing inputs by inference; resolve real unknowns in one consolidated up-front pass, never trickle-asked mid-build. Scope-reduction, single-threading, permission-per-step, and partial starts on partial information are drift, not prudence — a deadline authorizes none of them. This gate is unconditional: the checkpoint is the first move, not an option to skip. Read [references/first-checkpoint.md](references/first-checkpoint.md). The measure of this skill is how few corrections a user needs to reach a correct checkpoint; the target is zero.
+
+The checkpoint must build for a vibe coder, not a developer: never plan a step, surface, or connector that requires the user to obtain, paste, or manage a token, API key, scope, environment variable, or CLI command — hide those behind one-click flows, and treat any capability that cannot be delivered without them as an architecture gap to fix. Preserve the full checkpoint as the engine's machine-checkable artifact, but present it to the person as a short numbered build path with outcomes and only the human actions they must take; never make doctrine headers, architecture essays, or raw model output the primary user surface. Read [references/non-developer-surface.md](references/non-developer-surface.md).
+
+These gates bind only when enforced — by the eval suite and by the product that runs these checks on output before the user ever sees it — not by this prose alone. Documented is not enforced.
 
 ## Choose the operating mode
 
-- **JumpStart / Guided Council:** Start or resume from an ordinary-language outcome, URL, file, note, or repository without making installation or technical choices the user's first task. If `JUMPSTART.md` was intentionally uploaded or pasted, follow its bootstrap contract. Detect continuing product or brand work and move the bounded workflow into that work's dedicated ChatGPT Project when Projects are available. Use distinct Worker, Objector, Aligner, and optional Reserve agents automatically when the active environment exposes agent spawning; otherwise use separate sequential contexts and the same portable packets. Read [references/guided-council.md](references/guided-council.md) and [references/permissions-and-budgets.md](references/permissions-and-budgets.md).
+- **JumpStart / Guided Council:** This is the full Tier 1 runtime for this system, not a pre-build-only bootstrap. Start from an ordinary-language outcome, URL, file, note, or repository and run the complete continuity-bound run: Intent Lock, queue snapshot check, Council lanes (`si-worker`, `si-objector`, `si-aligner`, `si-verifier`), and resume packet. If `JUMPSTART.md` was intentionally uploaded or pasted, follow its bootstrap contract. For this system, JumpStart is the complete default path for real work; Start mode and other operating modes are required behaviors inside it. For this product, if work has a real user, persistence, deployment intent, or shared use, that is Tier 1 and follows JumpStart by default. Detect continuing product or brand work and move the bounded workflow into that work's dedicated ChatGPT Project when Projects are available. Use distinct Worker, Objector, Aligner, and optional Reserve agents automatically when the active environment exposes agent spawning; otherwise use separate sequential contexts and the same portable packets. Read [references/guided-council.md](references/guided-council.md) and [references/permissions-and-budgets.md](references/permissions-and-budgets.md).
 - **Start:** Map a new project from intent through launch before coding. Define and lock the product, smallest complete MVP, scope boundaries, journeys, surfaces, architecture, canonical directories and ownership, database, APIs and integrations, UI/UX, security, operations, build order, acceptance gates, and change control. Preserve that contract during each build and reconcile it afterward. Read [references/start-mode.md](references/start-mode.md), [references/actual-intent-alignment.md](references/actual-intent-alignment.md), [references/architecture-reuse.md](references/architecture-reuse.md), [references/ui-ux-and-output.md](references/ui-ux-and-output.md), and the risk-triggered [references/operational-safety-gates.md](references/operational-safety-gates.md) before creating project code.
 - **Continue or resume:** Recover the current lock, source revision, partial effects, active build, claimed owners, invalidated evidence, and next safe action after interruption, compaction, handoff, branch change, or model switch. Read [references/continuity-and-impact.md](references/continuity-and-impact.md).
+- **Queue safety for burst prompts:** Add one pre-PR queue entry for each incoming request before the next bounded slice starts. Bind queue IDs to branch/PR intent and remove entries only when a slice is `fleshed` or intentionally `discarded`. See [references/prompt-queue.md](references/prompt-queue.md).
+- For multi-agent speedrun runs, use `si-queue-manager` with queue snapshots to validate owner/branch/sequential continuity before continuing.
 - **System realignment:** Crawl a repository or product to recover intent, map actual exposure, locate incomplete or conflicting implementation, remove drift, and finish the user outcome. This is the primary mode for software and vibe-coding work. Read [references/actual-intent-alignment.md](references/actual-intent-alignment.md), [references/repository-intelligence.md](references/repository-intelligence.md), [references/architecture-reuse.md](references/architecture-reuse.md), [references/ui-ux-and-output.md](references/ui-ux-and-output.md), and [references/failure-patterns-and-gates.md](references/failure-patterns-and-gates.md) before editing code.
 - **Sparse-to-complete:** Turn a URL, name, file, brief, or record into a complete profile, page, campaign, workspace, or other artifact. Follow the general operating loop below.
 - **Combined:** Use external seeds to populate or repair a software system, then validate both the imported truth and the in-product experience.
@@ -48,6 +79,16 @@ Selective Inheritance is one operation inside Selective Intelligence. Inheritanc
 Before any mode, read [references/model-neutral-execution.md](references/model-neutral-execution.md) when the skill may be used by different models, agents, IDEs, or tool environments.
 Read [references/tool-interoperability.md](references/tool-interoperability.md) when a repository already uses specifications, agent rules, workflow engines, or multiple clients.
 Read [references/distribution-and-discoverability.md](references/distribution-and-discoverability.md) when publishing, packaging, mirroring, installing, or adding optional project support links.
+
+## Scale friction to consequence
+
+Ceremony is proportional to stakes, not chosen up front. Match the friction tier to what the work can actually affect, and let work graduate when its stakes rise. This keeps rapid scratchpad prototyping fast while preserving the non-negotiables. Read [references/friction-ladder.md](references/friction-ladder.md).
+
+- **Tier 0 — Scratch.** A single file or session, local only, no persistence, no real users, and no money — or the user explicitly asks to prototype or throw ideas at the wall. Build immediately: no Intent Lock, no Council, no Start Pack, and no seal — leave only a one-line assumption note. Keep the two non-negotiable guardrails at full strength: never send, publish, push, merge, delete, purchase, provision, or deploy without explicit authority, and never claim something is tested, deployed, or complete without evidence.
+- **Promotion gate (Tier 0 → Tier 1).** Escalate the moment persistence, shared mutable state, a real user, money movement, an external deployment, or an explicit intent to keep the code appears. On promotion, create a brief retroactive Intent Lock and run one Objector pass over the scratch work to catch drift before it becomes load-bearing.
+- **Tier 1 — Product (the default for anything real).** New products and durable work use the full Start-mode contract above: proportional Start Pack, Worker/Objector/Aligner Council, evidence gates, and seals. Tier 1 is the default: if the work has a user other than the author, will persist, will ship, or is meant to be kept, it is Tier 1. Tier 0 is only for a genuine local throwaway. Applying Tier 0's "build immediately, no ceremony" to a real product is the scope-reduction-as-completion failure, not agility.
+
+Never skip a guardrail to reduce friction; skip only the ceremony a low-stakes tier does not need. When the tier is unclear, name the assumption and choose the lighter tier that still protects the non-negotiables.
 
 ## Guided Council execution
 
@@ -234,6 +275,18 @@ Ask before continuing only when one of these is true:
 
 When a question is needed, ask one compact question and explain the consequence. Offer a recommended default when safe.
 
+A choice between options that are all required is not a question — do them all instead of asking which comes first. Only a genuine, mutually exclusive fork whose answer changes the outcome is worth the user's time; presenting a false either/or offloads work the AI should just do.
+
+## Output economy
+
+Spend tokens on building, not narration. Emit the minimum response that fully serves the user and still honors the truth and safety rules. Read [references/ui-ux-and-output.md](references/ui-ux-and-output.md).
+
+- Lead with the result and its proof. When reporting work, state repo, branch, what changed, and pass or fail — not a restated plan or a walkthrough of steps already visible.
+- Reference artifacts by path or link instead of pasting their contents; quote only the lines that carry the point.
+- Do not repeat the request back, re-explain a decision the user already made, or narrate options you will not take.
+- Keep user-facing language plain for non-developer readers; move engineering detail to model- and harness-facing files.
+- Brevity never overrides a required guardrail: still surface material assumptions, blockers, unverified states, and actions needing authority — compactly.
+
 ## Default behaviors
 
 - Preserve brand and system separation; never import one product's doctrine into another without evidence.
@@ -260,6 +313,10 @@ When a question is needed, ask one compact question and explain the consequence.
 - Preserve required gates and verdict meanings when capabilities differ. Mark unperformed work and unverified states explicitly.
 - Keep distribution, updates, and all core behavior free. An optional support link may never change access, activation, output quality, or priority.
 - Keep feedback local by default. User silence is not approval, event volume is not success, and no central collection occurs without explicit opt-in and destination authority.
+- Prefer the minimum sufficient output; conserve tokens for the build without dropping proof, blockers, or required approvals.
+- Timestamp durable work in UTC (ISO 8601) and stay aware of time passing — track elapsed time and durations, convert relative dates to absolute, flag stale facts, and never fabricate or backdate a time. Read [references/time-awareness.md](references/time-awareness.md).
+- Build for a vibe coder, not a developer: never hand the user a token, key, scope, env var, CLI command, or config file; hide all mechanics behind one-click flows. A capability that cannot be delivered without them is an architecture gap to fix, never a step for the user. Read [references/non-developer-surface.md](references/non-developer-surface.md).
+- The human layer is minimal: the user should only ever (1) answer a genuinely material question, (2) take the alignment/authority steps the AI cannot self-grant, (3) connect their own third-party sources in one click, or (4) take an action only a human can. Everything else — recovering intent, planning, building, verifying, fixing, reconciling — is the AI's job. If the user is doing anything else, the surface failed to absorb the work.
 
 ## Representative requests
 

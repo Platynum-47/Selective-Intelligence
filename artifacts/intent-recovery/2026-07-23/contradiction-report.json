@@ -1,0 +1,75 @@
+{
+  "runId": "2026-07-23",
+  "contradictions": [
+    {
+      "id": "C1",
+      "title": "SI vs Platynum ownership",
+      "conflict": "Early passes treated Platynum-47 as an independent product with its own model logic; later intent (I024) makes Platynum SI's control plane/dogfood target and SI authoritative.",
+      "impact": "Platynum shipped its own planner/builder prompts + direct provider call before being rewired to call SI.",
+      "queueImpact": "Tasks that built Platynum-local build logic (e5543d6, 8d94c8a) partially conflict with SI-authoritative intent.",
+      "affected": ["Platynum server.js", "SI build_engine.py"],
+      "resolution": "Resolved in direction at 018f9cd (Platynum -> thin gateway). Platynum-local prompts are now inert but still present (ADAPT/REMOVE).",
+      "humanConfirmation": false
+    },
+    {
+      "id": "C2",
+      "title": "Global model-key assumption vs capability-first",
+      "conflict": "Multiple passes framed a missing model key as 'globally unconfigured'; I023 mandates capability-first (block only affected lanes).",
+      "impact": "build_engine BACKEND defaults to anthropic; gateway/UI still imply a global key requirement.",
+      "queueImpact": "Backend-resolver work (bd5d097) supersedes the key-gate framing but the execution path is not yet wired to it.",
+      "affected": ["build_engine.py", "server.js", "BuildPanel.tsx"],
+      "resolution": "Resolver built (bd5d097). Remaining: route execution through the resolver; strip key-gate language.",
+      "humanConfirmation": false
+    },
+    {
+      "id": "C3",
+      "title": "Infrastructure-first vs first-executable-first",
+      "conflict": "I built lane registry/session/capabilities (infrastructure) before proving the first executable; I025 says the first executable (intent->understanding->discovery->queues->execution->verified result) must come first and lane infra is a hypothesis.",
+      "impact": "Sophisticated infra around an unverified interpretation; no end-to-end product proof (F010).",
+      "queueImpact": "Kernel tasks advanced without linking to an accepted acceptance criterion.",
+      "affected": ["lane_registry.py", "lane_session.py", "capabilities.py", "lanes/*"],
+      "resolution": "Freeze infra. Reclassify as QUARANTINE pending recovery. Define + prove the first executable before resuming.",
+      "humanConfirmation": true
+    },
+    {
+      "id": "C4",
+      "title": "Correction-as-slice vs correction-as-reconciliation",
+      "conflict": "Each of Thomas's corrections was turned into another build slice; I025 requires a correction to trigger intent reconciliation + queue impact analysis, not a new task.",
+      "impact": "Drift accumulated; the queue tracked locally convenient work instead of the intended product.",
+      "queueImpact": "No invalidation of superseded tasks; no dependency recalculation on new intent.",
+      "affected": ["whole session workflow"],
+      "resolution": "Adopt authoritative intent/fact/acceptance/dependency ledgers -> derived queues; reconcile on every new instruction.",
+      "humanConfirmation": false
+    },
+    {
+      "id": "C5",
+      "title": "Duplicate session models",
+      "conflict": "build_engine.py wrote <sid>.json while lane_session.py wrote <sid>.session.json (two authoritative stores).",
+      "impact": "Split-brain session state.",
+      "queueImpact": "None ongoing.",
+      "affected": ["build_engine.py", "lane_session.py"],
+      "resolution": "RESOLVED at 0d10cd2 — lane_session is the sole store; build_engine is a facade. Retain as a passing regression (D6).",
+      "humanConfirmation": false
+    },
+    {
+      "id": "C6",
+      "title": "Infrastructure completion mistaken for product progress",
+      "conflict": "Slices were reported 'done/verified' (accurately, for the infra) but no product acceptance evidence exists (I013, I025 completion gate).",
+      "impact": "Risk of reading committed/compiling code as movement toward the intended product.",
+      "queueImpact": "Completed-queue items lack links to product acceptance criteria.",
+      "affected": ["all kernel commits"],
+      "resolution": "Completion requires evidence against accepted product criteria, not code existing. Add drift case D9.",
+      "humanConfirmation": false
+    },
+    {
+      "id": "C7",
+      "title": "merlin/aicouncil output guidelines unread (I002)",
+      "conflict": "Output-economy doctrine was written from a paraphrase; the referenced merlin/AI-Council guideline was never located/read (F014).",
+      "impact": "Possible divergence from Thomas's actual output-format standard.",
+      "queueImpact": "A discovery task should have preceded writing the doctrine.",
+      "affected": ["SI/output-economy"],
+      "resolution": "Discovery task: locate + read the merlin/AI-Council output guideline; reconcile.",
+      "humanConfirmation": false
+    }
+  ]
+}
