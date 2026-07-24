@@ -16,10 +16,10 @@ Governing diagnosis (authoritative): SI doctrine was ahead of runtime. “Docume
 | Platynum live steering UI / gate (PR #2) | **Merged** — user-visible “What I understand you want” + 👎 surface |
 | Platynum T2 Intelligence/Checkpoint product loop | Pending |
 | SI Step-1 P0 (ops 1–4) | **Enforced in Python runtime** (this release; includes defect patches: RETRACT>override, deferred mkdir, session generationAuthority, current-checkpoint-only approve/reject/dislike) |
-| Platynum 👎 → SI `interrupt` product wiring | **Contract documented; product wiring still open until Platynum calls SI interrupt** |
-| Cross-model / cross-client equivalence | **Unproven** — do not claim REVIEW_PASS or Tier-4 |
+| Platynum 👎 → SI `interrupt` product wiring | **Wired** (Platynum PR #3) — invokes SI session-state interrupt/approve; external stop unproven |
+| Cross-model / cross-client equivalence | **Unproven** — do not claim REVIEW_PASS, T2, or Tier-4 |
 
-Merged Platynum PR #2 is a shipped **surface**. Without SI interrupt + checkpoint binding it is observation, not control. Do not re-open or duplicate that UI work in SI.
+Merged Platynum PR #2 is the shipped **surface**. Platynum PR #3 wires 👎/Correct → SI `interrupt` and Continue/Approve → SI `approve` (including re-approval). That closes the session-state control loop for the product gateway; it does **not** prove external model/tool/worker stop and does **not** claim T2.
 
 ## Screenshot failure class (acceptance)
 
@@ -39,13 +39,13 @@ That is Step-1 intent-control failure. Keyword parsers that miss `didnt`≠`don'
 ## Still doctrine / scaffolded (ops 5–7)
 
 5. **Semantic corrections** — deterministic retract/replace paths exist; richer conversational ops (“criticism not new task”, “preserve objective, remove process directive”) are scaffolded in evals as `pending_semantic` and must not be claimed complete.
-6. **Platynum wiring + external stop proof** — see [platynum-interrupt-wiring.md](platynum-interrupt-wiring.md). UI alone is insufficient; calling SI interrupt closes session-state control, not automatic proof that model streams/tool runners/workers halt.
+6. **Platynum wiring + external stop proof** — Platynum PR #3 calls SI interrupt/approve (session-state). External model/tool/worker stop remains unproven. See [platynum-interrupt-wiring.md](platynum-interrupt-wiring.md).
 7. **Behavioral matrix / cross-client evals** — cases added; pass requires equivalent authoritative intent **and** equivalent outcome across clients. Not claimed here.
 
 ## Honest taxonomy
 
 - **Platynum surface:** T0 + merged live-steering UI (PR #2)
 - **Intelligence/checkpoint product:** pre-T2 — do **not** claim T2
-- **SI:** partial Tier-1 controls; **Step-1 P0 ops 1–4 qualified in SI runtime tests**; interrupt is session-state-enforced; integrated Platynum↔SI loop closes only when 👎 calls SI interrupt; cross-model equivalence **unproven**
-- **Observational until wired:** Platynum 👎 UI without SI interrupt call
-- **Session-state-enforced in SI:** generationAuthority, execution lock, deferred mkdir, binding hashes, cancel/taint flags, current-checkpoint-only decisions
+- **SI:** partial Tier-1 controls; **Step-1 P0 ops 1–4 qualified in SI runtime tests**; interrupt is session-state-enforced; Platynum PR #3 invokes SI interrupt/approve (session-state loop closed for the gateway); cross-model equivalence **unproven**
+- **Observational / unproven:** external model generation streams, tool dispatchers, and workers actually stopping
+- **Session-state-enforced in SI (+ product call):** generationAuthority, execution lock, deferred mkdir, binding hashes, cancel/taint flags, current-checkpoint-only decisions; Platynum 👎 → `/api/model/interrupt`

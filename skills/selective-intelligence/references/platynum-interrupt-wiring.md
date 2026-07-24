@@ -1,6 +1,6 @@
 # Platynum 👎 → SI interrupt wiring contract
 
-Status: **contract + SI session-state backend shipped; product must call it**. Platynum live steering UI (PR #2) is **already merged**. Do not duplicate UI work. This document defines the backend contract SI exposes so the merged surface can become real session-state control.
+Status: **Platynum PR #3 wires product calls to SI session-state interrupt/approve**. Platynum live steering UI (PR #2) is **already merged**. Do not duplicate UI work.
 
 ## Problem
 
