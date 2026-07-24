@@ -9,6 +9,7 @@ Use this reference when Selective Intelligence coordinates more than one role, f
 - [Roles and authority](#roles-and-authority)
 - [Independence grades](#independence-grades)
 - [Execution selection](#execution-selection)
+- [Pre-action intent steering](#pre-action-intent-steering)
 - [Packet lifecycle](#packet-lifecycle)
 - [Objection and alignment rules](#objection-and-alignment-rules)
 - [Correction and revalidation](#correction-and-revalidation)
@@ -107,6 +108,21 @@ Inspect capabilities rather than assuming a named plan or model exposes them.
 5. If no fresh context is possible, run a visibly degraded Grade 0 counterexample pass and do not label it independent.
 
 Do not force extra subscriptions. Route to an additional provider only when the user has it, its data boundary permits the packet, and independent perspective or capacity materially helps.
+
+Provider or model identity never changes the Intent Lock, proof standard, or final user outcome. The same canonical packet (intent, constraints, context, checkpoints, acceptance tests) is supplied to every runtime so models remain interchangeable. See [model-neutral-execution.md](model-neutral-execution.md#governing-requirement-model-interchangeability).
+
+## Pre-action intent steering
+
+Before any Worker side effect (file mutation, build, publish, merge, spend, or other project-changing action), the run must surface a user-visible intent-understanding checkpoint.
+
+- First checkpoint title: **“What I understand you want.”**
+- Side effects stay queued/blocked until Continue or Approve clears the gate.
+- 👎 is a hard interrupt: cancel pending mutating work, capture correction, revise understanding, and re-gate before continuing.
+- 👍 is optional and must not add wait beyond the gate.
+
+This is the Council/product **pre-action drift catch** for model interchangeability: drifted interpretation is corrected before it becomes an action. Platynum-47 implements the live steering run-loop; SI packets and doctrine stay compatible with that gate. Do not invent halt-all, restart-project, or new-branch policies from a dislike or correction—only apply this documented requirement and existing checkpoint contracts.
+
+The full-scope build artifact in [first-checkpoint.md](first-checkpoint.md) remains mandatory for build-shaped Tier 1 work; live steering is the continuous pre-action check that keeps execution aligned to that lock across models.
 
 ## Packet lifecycle
 

@@ -172,6 +172,32 @@ Use these scenarios to evaluate Selective Intelligence across different LLMs and
 - validates through a fresh-context forward test that did not receive the expected answer;
 - records the outcome signal and does not weaken a gate merely to make the test pass.
 
+## Test O: Cross-runtime equivalence and pre-action checkpoint
+
+**Governing requirement:** Given the same task, context, and evidence, SI must produce an equivalently correct result across models, IDEs, agents, and environments. Any runtime that cannot meet the bar must be corrected, retried, or blocked by SI.
+
+**Fixture:** Identical task seed, Intent Lock (or recovered intent packet), constraints, evidence set, and acceptance tests. Run A and Run B use different models, IDEs, agents, or environments. At least one run attempts a drifted interpretation of scope or product truth before acting.
+
+**Quality benchmark (not reliability proof):** TradeScout profile seeding is the explicit quality benchmark for this class of sparse-to-complete work. Passing it once proves the bar is achievable. It does **not** prove SI is already reliable across tools.
+
+**Pass requirements:**
+
+- both runs receive the same canonical intent, constraints, context, checkpoints, and acceptance tests;
+- understood intent, approved scope, product truth, required workflow, quality threshold, and final user outcome match across runs;
+- prose and non-semantic implementation details may differ;
+- the first live steering checkpoint is **“What I understand you want”** and appears before any side effect;
+- dislike / hard interrupt cancels pending mutations, accepts correction, revises understanding, and re-gates before continuing;
+- a runtime that cannot meet the bar is corrected, retried, or blocked—not silently accepted;
+- the user is not required to know or care which model/runtime is active;
+- no invented halt-all, restart-project, or new-branch policy is introduced from the correction.
+
+**Fail conditions:**
+
+- different interpretation, scope, or product result across runtimes given the same inputs;
+- drift becomes an executed action before checkpoint correction;
+- treating a one-off quality-benchmark success (including TradeScout profile seeding) as proof of cross-tool reliability;
+- making the user spend most of the session repairing model-specific drift after the fact.
+
 ## Scoring
 
 Score each invariant as:
