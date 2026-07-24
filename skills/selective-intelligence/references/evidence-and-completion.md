@@ -62,6 +62,8 @@ A result is complete when it performs its intended job without placeholders or i
 
 Closed builds do not imply a closed release. Release completion additionally requires every included requirement, critical journey, prohibition, necessary actor, operational gate, and invalidated prior proof to reconcile at the current baseline.
 
+**Cross-runtime equivalence:** Given the same task, context, and evidence, completion means an equivalently correct user outcome across models and environments—not merely fluent prose from the current runtime. Different wording is fine; different intent, scope, product truth, workflow, quality threshold, or final outcome is not. A runtime that cannot meet the bar must be corrected, retried, or blocked before side effects land. See [model-neutral-execution.md](model-neutral-execution.md#governing-requirement-model-interchangeability). TradeScout profile seeding demonstrates the quality bar is achievable; repeating that bar without heavy user repair is what counts as reliability.
+
 ## Council provenance
 
 Every material Council result links its packet, role/run, provider/surface, source or artifact IDs, exact revision, validation performed, objections and dispositions, approvals, corrections, and current status. Prefer references plus hashes over copying full connected documents. Preserve license or reuse authority when adopting external material.

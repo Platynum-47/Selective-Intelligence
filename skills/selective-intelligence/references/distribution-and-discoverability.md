@@ -41,6 +41,8 @@ selective-intelligence/
 
 The repository's `skills/selective-intelligence/` directory is the canonical portable source. The purpose-built release archive projects that same directory as one top-level `selective-intelligence/` folder. Vendor it into `.agents/skills/selective-intelligence/` where clients support the cross-client convention, or use the client's documented skill path. Do not duplicate it under repository-root or client-specific skill directories: adapters may point to or install the canonical directory but may not fork its behavioral contract.
 
+**Local Claude / Codex skill sync:** when a developer keeps a working copy under `~/.claude/skills/selective-intelligence/` (or an equivalent client skill path), treat that copy as a mirror of `skills/selective-intelligence/` in this repository. After doctrine changes, overwrite the local mirror from the repo path; do not edit the local mirror first and treat it as authority.
+
 Do not claim a GitHub repository, publisher, support destination, website, privacy policy, or verified identity until the owner supplies and controls the exact value.
 
 ## Publisher account isolation

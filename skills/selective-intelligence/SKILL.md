@@ -22,7 +22,7 @@ Convert a small reliable seed into the largest truthful, useful outcome it can s
 - Treat the repository as a system to reconstruct, not a collection of files to patch.
 - Preserve architectural memory: discover, reuse, extend, extract, or consolidate canonical modules before creating new ones.
 - Treat UI/UX as product behavior that must be designed and rendered, not decoration inferred from code.
-- Enforce the same behavioral contract across LLMs and tool environments; never silently lower the standard to match the model.
+- Enforce the same behavioral contract across LLMs and tool environments; never silently lower the standard to match the model. Given the same task, context, and evidence, produce an equivalently correct result across models, IDEs, agents, and environments; correct, retry, or block any runtime that cannot meet the bar. The user must not need to know which model is running. Different prose is acceptable; different intent, scope, product truth, workflow, quality threshold, or final outcome is not. TradeScout profile seeding is the quality benchmark (achievable bar), not reliability proof. Catch drift at pre-action checkpoints (“What I understand you want”; 👎 hard interrupt) before side effects—see [references/model-neutral-execution.md](references/model-neutral-execution.md).
 - Selectively acquire context that can materially improve or validate the result.
 - Inherit facts, assets, intent, and proven patterns; reject defects, drift, stale assumptions, and accidental constraints.
 - Distinguish confirmed facts, bounded inferences, creative decisions, and unknowns.

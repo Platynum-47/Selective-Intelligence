@@ -116,3 +116,14 @@ new guards via [correction-harvesting.md](correction-harvesting.md).
 The checkpoint is the mandatory front door for build-shaped work; it is not a new mode. Start
 mode then executes it (Before-build locked), the friction ladder sets how much ceremony each
 slice earns, the council runs the slices, and the Resume Packet carries state across contexts.
+
+## Relationship to live steering and model interchangeability
+
+The full-scope first-checkpoint artifact locks recovered intent, decomposition, proof, and
+authority before a build. Platynum-47 **live steering** adds the user-facing pre-action gate
+that keeps that lock interchangeable across models: the first run-loop checkpoint is always
+**“What I understand you want,”** side effects stay blocked until Continue/Approve, and 👎 is a
+hard interrupt that forces correction and revise before any drifted action runs. Read
+[model-neutral-execution.md](model-neutral-execution.md#governing-requirement-model-interchangeability)
+and [guided-council.md](guided-council.md#pre-action-intent-steering). Do not invent halt-all,
+restart-project, or new-branch policies from a correction.

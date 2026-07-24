@@ -4,6 +4,8 @@ All notable behavior changes to Selective Intelligence are recorded here.
 
 ## Unreleased
 
+- Encoded the product-owner **model interchangeability** governing requirement: given the same task, context, and evidence, SI must produce an equivalently correct result across models, IDEs, agents, and environments; any runtime that cannot meet the bar must be corrected, retried, or blocked. Different prose is acceptable; different intent, scope, product truth, workflow, quality threshold, or final outcome is not. Documented **TradeScout profile seeding** as the explicit quality benchmark (achievable bar), not reliability proof. Cross-linked Platynum-47 live steering checkpoints (“What I understand you want” before side effects; 👎 hard interrupt) as the pre-action drift-catch mechanism. Strengthened Gate 25, added Gate 38, portability Test O, and eval cases `cross-runtime-equivalence-governing` and `pre-action-live-steering-checkpoint-gate`. Did not invent halt/restart/new-branch policies beyond documenting this requirement.
+
 - Documented the v1 **fixed allowlists** as deliberate fail-closed gates: portable release top-level names in `references/distribution-and-discoverability.md`, and PolicyGuard structured commands in `references/permissions-and-budgets.md`. A valid new skill/lane path or command absent from the set is denied or blocks packaging; it is not auto-included.
 
 - Added `si-queue-manager` to the delegation split. It uses queue snapshots to validate:

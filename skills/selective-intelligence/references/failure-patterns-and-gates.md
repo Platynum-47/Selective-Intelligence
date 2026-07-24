@@ -11,6 +11,7 @@ This reference converts recurring human corrections into system-level prevention
 - [Gates 15–19: UI, output medium, primary outcome, scope, and QA](#gate-15-ui-theater)
 - [Gates 20–25: Iteration, routes, production truth, assets, public shells, and model portability](#gate-20-iteration-regression)
 - [Gates 26–35: Authority attacks, executable locks, continuity, evidence, release truth, and learning](#gate-26-data-as-instruction)
+- [Gates 36–38: Council collusion, permission laundering, and post-action drift repair](#gate-36-role-theater-and-council-collusion)
 - [Final anti-failure pass](#final-anti-failure-pass)
 
 ## Correction amplification rule
@@ -221,11 +222,11 @@ Do not make the user repeat the same correction file by file or month after mont
 
 ## Gate 25: Model-dependent correctness
 
-**Failure:** The workflow works only when a specific LLM remembers hidden context, uses proprietary tools, performs unusually strong implicit reasoning, or fills undocumented gaps correctly.
+**Failure:** The workflow works only when a specific LLM remembers hidden context, uses proprietary tools, performs unusually strong implicit reasoning, or fills undocumented gaps correctly. Or: two runtimes given the same task, context, and evidence produce different intent, scope, product truth, workflow, quality threshold, or final outcome, and SI lets the weaker result proceed.
 
-**Detection:** Another model skips major gates, invents missing context, changes verdict definitions, creates new code before searching, or silently reduces scope when a tool is absent.
+**Detection:** Another model skips major gates, invents missing context, changes verdict definitions, creates new code before searching, silently reduces scope when a tool is absent, or forces the user to spend most of the session correcting drift after actions already ran.
 
-**Gate:** Apply model-neutral-execution.md. Externalize intent, system map, decisions, evidence, and verdict; use capability-based tool routing; preserve invariant decision orders; and treat missing capability as a named blocker rather than permission to lower the standard.
+**Gate:** Apply model-neutral-execution.md, including the governing interchangeability requirement. Externalize intent, system map, decisions, evidence, and verdict; supply the same canonical packet (intent, constraints, context, checkpoints, acceptance tests) to every runtime; use capability-based tool routing; preserve invariant decision orders; emit the pre-action “What I understand you want” checkpoint before side effects; treat 👎 as a hard interrupt that blocks drifted actions; and correct, retry, or block any runtime that cannot meet the quality bar rather than lowering the standard. TradeScout profile seeding is the quality benchmark for achievability—not proof that reliability already holds across tools.
 
 ## Gate 26: Data as instruction
 
@@ -338,3 +339,11 @@ Any “yes” requires another correction pass or a truthful named blocker.
 **Detection:** No exact receipt binds action/target/destination/data/cost, an Objector packet carries mutation authority, provider/account ownership is missing, or a metered route lacks a hard limit.
 
 **Gate:** Deny unknown actions, separate action classes and billing pools, sanitize exports, require exact human/quorum approval, and block metered use without a numeric ceiling.
+
+## Gate 38: Post-action drift repair as the control plane
+
+**Failure:** SI lets a model act on a drifted interpretation of intent or scope, then relies on the user to notice and correct after side effects (or after most of the session is spent repairing the agent).
+
+**Detection:** No pre-action “What I understand you want” gate; dislike/correction does not interrupt pending mutations; different runtimes change product result while prose looks fine; a strong one-off (e.g., TradeScout profile seeding) is treated as proof of cross-tool reliability.
+
+**Gate:** Catch and correct drift before action via live steering checkpoints and the canonical packet. Correct, retry, or block the runtime. Do not invent halt-all, restart-project, or new-branch policies from the correction. Treat quality-benchmark success as the bar to repeat—not as reliability already achieved.
