@@ -9,6 +9,7 @@ Selective Intelligence is free public infrastructure. Distribution must make the
 - [Search contract](#search-contract)
 - [Installation contract](#installation-contract)
 - [Releases and integrity](#releases-and-integrity)
+- [Portable surface allowlist (v1)](#portable-surface-allowlist-v1)
 - [Mirrors, directories, and clients](#mirrors-directories-and-clients)
 - [Free-use guarantee](#free-use-guarantee)
 - [Optional donation link](#optional-donation-link)
@@ -88,6 +89,18 @@ Never require a proprietary installer. A third-party installer may be documented
 - Run skill validation, script tests, schema checks, link checks, privacy checks, and the cross-model conformance set before release.
 - Treat prompt-case declarations and deterministic utility controls as separate evidence. Public release requires reproducible model/client behavior evidence in a digested, released `evals/model-runs/*.json` artifact; a list of expected answers or an unrelated release file is not an executed evaluation. Each model-run artifact must identify schema version 1, `selective-intelligence`, the exact skill version, model/client, observation timestamp, an overall pass, and one unique passing result for every case currently declared in `evals/evals.json`.
 - Record the tested model/client matrix. “Portable contract” does not mean every model has been proven equivalent.
+
+## Portable surface allowlist (v1)
+
+`scripts/release.py` enforces a **fixed** top-level portable skill surface (`ALLOWED_TOP_LEVEL_FILES` and `ALLOWED_TOP_LEVEL_DIRS`). That fixed set is deliberate for v1: new shippable top-level names are not discovered by walking the tree; they must be added to the allowlist in an explicit packaging change.
+
+When a **valid** new skill directory or lane path exists on disk — including a well-formed `lanes/*.json` manifest already listed in `metadata/distribution.json` — but its top-level name is **absent** from that allowlist, release validation **fails closed**. The error shape is:
+
+```text
+release manifest path is outside the portable skill surface: <path>
+```
+
+Packaging does not proceed, and the path is not silently omitted. Do not weaken this gate by auto-including unknown top-level names. To ship a new top-level surface (for example `lanes/` or `tests/`), update the allowlist and the release manifest together, then re-run release validation.
 
 ## Mirrors, directories, and clients
 

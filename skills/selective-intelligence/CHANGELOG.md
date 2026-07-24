@@ -4,6 +4,8 @@ All notable behavior changes to Selective Intelligence are recorded here.
 
 ## Unreleased
 
+- Documented the v1 **fixed allowlists** as deliberate fail-closed gates: portable release top-level names in `references/distribution-and-discoverability.md`, and PolicyGuard structured commands in `references/permissions-and-budgets.md`. A valid new skill/lane path or command absent from the set is denied or blocks packaging; it is not auto-included.
+
 - Added `si-queue-manager` to the delegation split. It uses queue snapshots to validate:
   owner/branch/status, and open-order before each worker continuation. The queue manager only
   interrupts work when there is a clear mismatch; normal in-sequence progress returns `continue`.
