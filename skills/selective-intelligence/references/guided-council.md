@@ -120,7 +120,7 @@ Before any Worker side effect (file mutation, build, publish, merge, spend, or o
 - 👎 is a hard interrupt: cancel pending mutating work, capture correction, revise understanding, and re-gate before continuing.
 - 👍 is optional and must not add wait beyond the gate.
 
-This is the Council/product **pre-action drift catch** for model interchangeability: drifted interpretation is corrected before it becomes an action. Platynum-47 implements the live steering run-loop; SI packets and doctrine stay compatible with that gate. Do not invent halt-all, restart-project, or new-branch policies from a dislike or correction—only apply this documented requirement and existing checkpoint contracts.
+This is the Council/product **pre-action drift catch** for model interchangeability: drifted interpretation is corrected before it becomes an action. Platynum-47's live steering UI (**PR #2, merged**) is the surface; SI owns interpretation authority via approved checkpoints and `interrupt` (see [step1-intent-control-status.md](step1-intent-control-status.md)). Do not invent halt-all, restart-project, or new-branch policies from a dislike or correction—only apply this documented requirement and existing checkpoint contracts. Do not re-open or duplicate the merged Platynum UI work.
 
 The full-scope build artifact in [first-checkpoint.md](first-checkpoint.md) remains mandatory for build-shaped Tier 1 work; live steering is the continuous pre-action check that keeps execution aligned to that lock across models.
 
