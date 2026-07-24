@@ -116,11 +116,14 @@ Provider or model identity never changes the Intent Lock, proof standard, or fin
 Before any Worker side effect (file mutation, build, publish, merge, spend, or other project-changing action), the run must surface a user-visible intent-understanding checkpoint.
 
 - First checkpoint title: **“What I understand you want.”**
-- Side effects stay queued/blocked until Continue or Approve clears the gate.
-- 👎 is a hard interrupt: cancel pending mutating work, capture correction, revise understanding, and re-gate before continuing.
-- 👍 is optional and must not add wait beyond the gate.
+- Side effects stay queued/blocked until the checkpoint is approved.
+- **Platynum:** clickable Approve / Correct (wired to SI `approve` / `interrupt` with current checkpoint id + intent hash).
+- **Outside Platynum (this skill, Cursor, IDE agents):** never render decorative Approve/Correct or emoji controls. Ask for the text gate only:
+  - `APPROVE`
+  - `CORRECT: <instruction>`
+- Correct / `CORRECT:` interrupts, cancels pending mutating work, classifies `RETRACT` or `REPLACE`, emits a new checkpoint, and re-gates before continuing.
 
-This is the Council/product **pre-action drift catch** for model interchangeability: drifted interpretation is corrected before it becomes an action. Platynum-47's live steering UI (**PR #2, merged**) is the surface; SI owns interpretation authority via approved checkpoints and `interrupt` (see [step1-intent-control-status.md](step1-intent-control-status.md)). Do not invent halt-all, restart-project, or new-branch policies from a dislike or correction—only apply this documented requirement and existing checkpoint contracts. Do not re-open or duplicate the merged Platynum UI work.
+This is the Council/product **pre-action drift catch** for model interchangeability: drifted interpretation is corrected before it becomes an action. SI owns interpretation authority via approved checkpoints and `interrupt` (see [step1-intent-control-status.md](step1-intent-control-status.md)). Do not invent halt-all, restart-project, or new-branch policies from a dislike or correction—only apply this documented requirement and existing checkpoint contracts.
 
 The full-scope build artifact in [first-checkpoint.md](first-checkpoint.md) remains mandatory for build-shaped Tier 1 work; live steering is the continuous pre-action check that keeps execution aligned to that lock across models.
 

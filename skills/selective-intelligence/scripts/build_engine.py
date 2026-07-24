@@ -411,6 +411,7 @@ def approve_project(
     *,
     session_id: str,
     checkpoint_id: str | None = None,
+    intent_hash: str | None = None,
     plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     session = LS.load_session(session_id)
@@ -420,7 +421,11 @@ def approve_project(
     if not checkpoint_id:
         raise EngineError("no checkpoint to approve")
     try:
-        CP.approve_checkpoint(session, checkpoint_id)
+        CP.approve_checkpoint(
+            session,
+            checkpoint_id,
+            expected_intent_hash=intent_hash,
+        )
     except CP.CheckpointError as exc:
         raise EngineError(str(exc)) from exc
     workspace = session.get("workspace")
@@ -432,6 +437,52 @@ def approve_project(
     _apply_pending_plan(session)
     LS.save_session(session)
     return session
+
+
+def apply_text_gate(
+    *,
+    session_id: str,
+    raw_response: str,
+    checkpoint_id: str | None = None,
+    intent_hash: str | None = None,
+) -> dict[str, Any]:
+    """Apply a non-Platynum text-gate reply (APPROVE / CORRECT: …).
+
+    Same transactions as Platynum Approve / Correct buttons.
+    """
+    import text_gate as TG
+
+    parsed = TG.parse_text_gate(raw_response)
+    if parsed["action"] == "approve":
+        session = approve_project(
+            session_id=session_id,
+            checkpoint_id=checkpoint_id,
+            intent_hash=intent_hash,
+        )
+        return {
+            "action": "approve",
+            "session": session,
+            "siCheckpointId": session.get("authorizedCheckpointId") or session.get("currentCheckpointId"),
+            "intentHash": session.get("authorizedIntentHash"),
+            "executionLocked": session.get("executionLocked"),
+        }
+    session, result = interrupt_project(
+        session_id=session_id,
+        correction=parsed["correction"],
+        disliked_checkpoint_id=checkpoint_id,
+    )
+    new_cp = result.get("newCheckpoint") or {}
+    return {
+        "action": "correct",
+        "session": session,
+        "operation": result.get("operation"),
+        "interruptedCheckpointId": result.get("interruptedCheckpointId"),
+        "newCheckpoint": new_cp,
+        "siCheckpointId": new_cp.get("checkpoint_id"),
+        "intentHash": new_cp.get("intent_hash") or result.get("newIntentHash"),
+        "executionLocked": True,
+        "resumeRequiresApproval": True,
+    }
 
 def interrupt_project(
     *,
@@ -795,12 +846,44 @@ def cmd_approve(args: argparse.Namespace) -> int:
         session = approve_project(
             session_id=args.session,
             checkpoint_id=args.checkpoint,
+            intent_hash=getattr(args, "intent_hash", None),
             plan=plan,
         )
     except (EngineError, ValueError, OSError, json.JSONDecodeError) as exc:
         print(json.dumps({"error": str(exc), "code": "approve_failed"}))
         return 2
     print(json.dumps(LS.summary(session), indent=2))
+    return 0
+
+
+def cmd_text_gate(args: argparse.Namespace) -> int:
+    try:
+        result = apply_text_gate(
+            session_id=args.session,
+            raw_response=args.response,
+            checkpoint_id=args.checkpoint,
+            intent_hash=args.intent_hash,
+        )
+    except (EngineError, ValueError, OSError) as exc:
+        code = "text_gate_failed"
+        if "invalid text gate" in str(exc).lower() or "execution locked" in str(exc).lower():
+            code = "bad_input"
+        print(json.dumps({"error": str(exc), "code": code}))
+        return 2
+    session = result.pop("session")
+    payload = {
+        "sessionId": session["sessionId"],
+        **{k: v for k, v in result.items() if k != "newCheckpoint"},
+        "state": LS.global_state(session),
+        "executionLocked": session.get("executionLocked"),
+        "mutationFrozen": session.get("mutationFrozen"),
+        "currentCheckpoint": CP.checkpoint_public_view(CP.current_checkpoint(session))
+        if CP.current_checkpoint(session)
+        else None,
+    }
+    if result.get("newCheckpoint"):
+        payload["newCheckpoint"] = CP.checkpoint_public_view(result["newCheckpoint"])
+    print(json.dumps(payload, indent=2))
     return 0
 
 
@@ -1008,8 +1091,23 @@ def main() -> int:
     approve = sub.add_parser("approve")
     approve.add_argument("--session", required=True)
     approve.add_argument("--checkpoint")
+    approve.add_argument(
+        "--intent-hash",
+        dest="intent_hash",
+        help="Fail closed unless this matches the checkpoint intent_hash",
+    )
     approve.add_argument("--plan")
     approve.set_defaults(func=cmd_approve)
+
+    text_gate_cmd = sub.add_parser(
+        "text-gate",
+        help="Apply APPROVE or CORRECT: <instruction> (non-Platynum clients)",
+    )
+    text_gate_cmd.add_argument("--session", required=True)
+    text_gate_cmd.add_argument("--response", required=True, help="Raw APPROVE or CORRECT: … text")
+    text_gate_cmd.add_argument("--checkpoint")
+    text_gate_cmd.add_argument("--intent-hash", dest="intent_hash")
+    text_gate_cmd.set_defaults(func=cmd_text_gate)
 
     interrupt_cmd = sub.add_parser("interrupt")
     interrupt_cmd.add_argument("--session", required=True)

@@ -345,6 +345,109 @@ class SessionTests(unittest.TestCase):
             self.assertTrue(session["queue"][discovery["taskId"]].get("tainted"))
             self.assertTrue(session["mutationFrozen"])
 
+    def test_approve_requires_matching_intent_hash(self):
+        with tempfile.TemporaryDirectory() as temp:
+            os.environ["SI_SESSION_DIR"] = temp
+            session = LS.new_session("Build a pantry board")
+            checkpoint = CP.current_checkpoint(session)
+            assert checkpoint is not None
+            with self.assertRaises(CP.CheckpointError) as ctx:
+                CP.approve_checkpoint(
+                    session,
+                    checkpoint["checkpoint_id"],
+                    expected_intent_hash="deadbeef" * 8,
+                )
+            self.assertIn("stale authorized_intent_hash", str(ctx.exception))
+            self.assertTrue(session["executionLocked"])
+            CP.approve_checkpoint(
+                session,
+                checkpoint["checkpoint_id"],
+                expected_intent_hash=checkpoint["intent_hash"],
+            )
+            self.assertFalse(session["executionLocked"])
+            self.assertEqual(session["authorizedIntentHash"], checkpoint["intent_hash"])
+
+    def test_text_gate_approve_and_correct_use_same_transactions(self):
+        import text_gate as TG
+
+        with tempfile.TemporaryDirectory() as temp:
+            os.environ["SI_SESSION_DIR"] = temp
+            session = BE.start_project(
+                request="Continue the ISSA own-shell fix only.",
+                workspace=str(Path(temp) / "ws"),
+                canonical_roots=[],
+                auto_approve=False,
+            )
+            cp = CP.current_checkpoint(session)
+            assert cp is not None
+            self.assertTrue(session["executionLocked"])
+
+            with self.assertRaises(TG.TextGateError):
+                TG.parse_text_gate("looks good 👍")
+            with self.assertRaises(TG.TextGateError):
+                TG.parse_text_gate("Approve / Correct")
+
+            approved = BE.apply_text_gate(
+                session_id=session["sessionId"],
+                raw_response="APPROVE",
+                checkpoint_id=cp["checkpoint_id"],
+                intent_hash=cp["intent_hash"],
+            )
+            self.assertEqual(approved["action"], "approve")
+            self.assertFalse(approved["executionLocked"])
+
+            corrected = BE.apply_text_gate(
+                session_id=session["sessionId"],
+                raw_response="CORRECT: i didnt say halt did i? nope. Continue own-shell only.",
+                checkpoint_id=session.get("authorizedCheckpointId") or session.get("currentCheckpointId"),
+            )
+            self.assertEqual(corrected["action"], "correct")
+            self.assertEqual(corrected["operation"], "RETRACT")
+            self.assertTrue(corrected["executionLocked"])
+            self.assertTrue(corrected["resumeRequiresApproval"])
+            new_id = corrected["siCheckpointId"]
+            self.assertNotEqual(new_id, cp["checkpoint_id"])
+
+            # Side effects remain blocked until the new checkpoint is approved.
+            session = LS.load_session(session["sessionId"])
+            with self.assertRaises(CP.CheckpointError):
+                CP.require_authorized_checkpoint(session)
+
+            # Stale id+hash fail closed.
+            with self.assertRaises(BE.EngineError) as stale_ctx:
+                BE.approve_project(
+                    session_id=session["sessionId"],
+                    checkpoint_id=cp["checkpoint_id"],
+                    intent_hash=cp["intent_hash"],
+                )
+            self.assertIn("stale checkpoint", str(stale_ctx.exception))
+
+            new_cp = CP.current_checkpoint(session)
+            assert new_cp is not None
+            BE.approve_project(
+                session_id=session["sessionId"],
+                checkpoint_id=new_cp["checkpoint_id"],
+                intent_hash=new_cp["intent_hash"],
+            )
+            session = LS.load_session(session["sessionId"])
+            self.assertFalse(session["executionLocked"])
+
+
+class TextGateUnitTests(unittest.TestCase):
+    def test_parse_approve_and_correct(self):
+        import text_gate as TG
+
+        self.assertEqual(TG.parse_text_gate("APPROVE")["action"], "approve")
+        self.assertEqual(TG.parse_text_gate("approve")["action"], "approve")
+        parsed = TG.parse_text_gate("CORRECT: keep own-shell only")
+        self.assertEqual(parsed["action"], "correct")
+        self.assertEqual(parsed["correction"], "keep own-shell only")
+        prompt = TG.text_gate_prompt(checkpoint_summary="Fix own-shell path")
+        self.assertIn("APPROVE", prompt)
+        self.assertIn("CORRECT:", prompt)
+        self.assertNotIn("👍", prompt)
+        self.assertNotIn("👎", prompt)
+
 
 class WorkerPacketTests(unittest.TestCase):
     def test_packet_preserves_constraints_and_excludes_sensitive_files(self):

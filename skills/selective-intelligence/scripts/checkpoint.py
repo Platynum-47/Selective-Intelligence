@@ -155,12 +155,15 @@ def approve_checkpoint(
     checkpoint_id: str,
     *,
     actor: str = "user",
+    expected_intent_hash: str | None = None,
 ) -> dict[str, Any]:
     checkpoint = get_checkpoint(session, checkpoint_id)
     if not checkpoint:
         raise CheckpointError("checkpoint not found")
     if session.get("currentCheckpointId") != checkpoint_id:
         raise CheckpointError("stale checkpoint; only currentCheckpointId may be approved")
+    if expected_intent_hash is not None and expected_intent_hash != checkpoint.get("intent_hash"):
+        raise CheckpointError("stale authorized_intent_hash; fail closed")
     if checkpoint["status"] not in {"proposed", "correction_mode"}:
         raise CheckpointError(f"checkpoint cannot be approved from status {checkpoint['status']}")
     # Supersede any previously approved checkpoint.

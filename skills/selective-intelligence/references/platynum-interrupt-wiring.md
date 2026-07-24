@@ -1,10 +1,14 @@
-# Platynum 👎 → SI interrupt wiring contract
+# Platynum ↔ SI interrupt/approve wiring contract
 
-Status: **Platynum PR #3 wires product calls to SI session-state interrupt/approve**. Platynum live steering UI (PR #2) is **already merged**. Do not duplicate UI work.
+Status: **Platynum wires clickable Approve/Correct to SI session-state transactions** (current checkpoint id + intent hash). Outside Platynum, clients use the text gate `APPROVE` / `CORRECT: <instruction>` — same transactions; never decorative controls.
+
+## Product boundary
+
+> **Platynum owns the clickable steering interface. SI owns the mandatory checkpoint, interrupt, correction, and execution-lock behavior everywhere.**
 
 ## Problem
 
-The merged UI can show “What I understand you want” and accept 👎. Without an authoritative SI interrupt transaction, dislike remains observation: generation, tool dispatch, and FS/Git mutations can continue under a rejected interpretation.
+Without an authoritative SI interrupt/approve transaction, Correct/Approve remains observation: generation, tool dispatch, and FS/Git mutations can continue under a rejected or unapproved interpretation.
 
 ## Claim scope (honest)
 
@@ -13,80 +17,65 @@ SI `interrupt` is an **atomic SI session-state interruption**:
 - Sets `generationAuthority=false`, `mutationFrozen=true`, `executionLocked=true`, `correctionMode=true`
 - Marks queued tasks cancelled; marks running/verifying/repairing cancelled or cancellation-requested in session state
 - Taints completed effects bound to the rejected checkpoint
-- Emits a new proposed checkpoint; resume requires `approve`
+- Classifies correction as an intent operation (`RETRACT`, `REPLACE`, …)
+- Emits a new proposed checkpoint; resume requires `approve` of that new checkpoint with matching intent hash
 
-Until a product connection proves that model generation streams, tool dispatchers, and external workers actually honor those flags and stop, do **not** claim a full hard-stop of those runtimes. Document product wiring as invoking the SI interrupt transaction; document remaining gaps as observational/external.
+Until a product connection proves that model generation streams, tool dispatchers, and external workers actually honor those flags and stop, do **not** claim a full hard-stop of those runtimes.
 
-## SI endpoint (authoritative)
+## SI endpoints (authoritative)
 
 ```
 POST /si/v1/sessions/{session_id}/interrupt
+POST /si/v1/sessions/{session_id}/approve
 ```
 
-CLI equivalent (shipped in SI runtime):
+CLI:
 
 ```
-python build_engine.py interrupt \
-  --session <session_id> \
-  --correction "<user correction text>" \
-  [--checkpoint <disliked_checkpoint_id>]
+python build_engine.py interrupt --session <id> --correction "<text>" [--checkpoint <id>]
+python build_engine.py approve --session <id> --checkpoint <id> --intent-hash <hash>
+python build_engine.py text-gate --session <id> --response "APPROVE" --checkpoint <id> --intent-hash <hash>
+python build_engine.py text-gate --session <id> --response "CORRECT: <instruction>"
 ```
 
-Also available as `correct` (stores optional pending plan; still requires `approve`).
+### Approve
 
-### Request
+Must include the **current** checkpoint id and intent hash. Stale id or hash → fail closed.
 
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `correction` | yes | Raw user text (e.g. “i didnt say halt did i? nope.”) |
-| `disliked_checkpoint_id` | recommended | Must equal `currentCheckpointId` or fail closed |
-| `structured_intent` | optional | Validated override; never defeats text-derived RETRACT |
+### Correct / interrupt
 
-### Atomic effects (must all occur in one transaction)
+1. Interrupt active run (session-state)
+2. Cancel pending dispatch
+3. Capture correction as `RETRACT` or `REPLACE` (operation-aware)
+4. Create a new checkpoint
+5. Continue only after that new checkpoint is approved
 
-1. Stop session generation authority for that checkpoint
-2. Prevent new SI-gated tool dispatch
-3. Cancel queued tasks bound to the checkpoint
-4. Request cancel of running / verifying / repairing (not only pending) in session state
-5. Freeze new FS / Git / deploy mutations gated by this session
-6. Mark completed effects from the rejected checkpoint as potentially tainted
-7. Capture the correction as an intent operation (`RETRACT`, etc.)
-8. Create a new proposed checkpoint version
-9. Return removed / retained / changed
-10. Resume only after `approve` of the new checkpoint (which restores session `generationAuthority`)
-
-### Response (minimum)
+### Response (minimum for interrupt)
 
 ```json
 {
   "interruptedCheckpointId": "cp-…",
   "newCheckpoint": { "checkpoint_id": "cp-…", "status": "proposed", "intent_hash": "…" },
   "operation": "RETRACT",
-  "cancelledTaskIds": [],
-  "cancelRequestedTaskIds": [],
-  "taintedEffectIds": [],
-  "removed": {},
-  "retained": {},
-  "changed": {},
   "resumeRequiresApproval": true,
   "mutationFrozen": true,
   "generationAuthority": false
 }
 ```
 
-## Platynum client obligations
+## Non-Platynum text gate
 
-On 👎 (or equivalent hard interrupt):
+Do not render fake Approve/Correct controls. Require:
 
-1. Call SI `interrupt` **before** allowing any further mutating tool calls.
-2. Bind subsequent work only to `newCheckpoint.checkpoint_id` after user Continu/Approve maps to SI `approve`.
-3. Do not invent halt-all / restart-project / new-branch policies from the dislike itself.
-4. Treat SI as interpretation authority; model text is proposal only.
-5. Document honestly: wiring invokes SI session-state interrupt; external stop is proven only when product/runtime evidence shows model/tool/workers halt.
+```text
+APPROVE
+CORRECT: <instruction>
+```
+
+Parsed by `scripts/text_gate.py`; applied via `build_engine text-gate` / `apply_text_gate`.
 
 ## Non-claims
 
-- This contract being documented does **not** close the integrated Platynum↔SI loop until the product calls interrupt.
-- Merged UI without wired interrupt is **not** Step-1 enforcement.
 - Calling SI interrupt is **session-state control**, not automatic proof of external model/tool/worker stop.
-- Cross-model reliability remains unproven until matrix evals pass across clients. Do not claim T2 from this wiring alone.
+- Cross-model reliability remains unproven until matrix evals pass. Do not claim T2 from this wiring alone.
+- No ops 5–7 expansion in this contract.
