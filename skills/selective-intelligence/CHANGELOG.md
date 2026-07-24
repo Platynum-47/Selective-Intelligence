@@ -4,7 +4,9 @@ All notable behavior changes to Selective Intelligence are recorded here.
 
 ## Unreleased
 
-- **Platynum PR #3 wiring noted:** product gateway now calls SI `interrupt` on 👎/correct and SI `approve` on Continue/Approve (re-approval after revise). Session-state loop closed for the gateway; external model/tool/worker stop still unproven. No T2 / cross-model claim.
+- **Text gate + approve intent-hash (Platynum↔SI complete wiring):** Approve requires current checkpoint id + intent hash (fail closed on stale). Non-Platynum clients use explicit `APPROVE` / `CORRECT: <instruction>` via `scripts/text_gate.py` and `build_engine text-gate` — same transactions as Platynum buttons; decorative Approve/Correct / emoji controls removed from skill/docs prompts. Platynum Correct → interrupt → RETRACT/REPLACE → new checkpoint → blocked until re-approve. External model/tool/worker stop still unproven. No ops 5–7 / T2 claim.
+
+- **Platynum PR #3 wiring noted:** product gateway now calls SI `interrupt` on Correct and SI `approve` on Continue/Approve (re-approval after revise). Session-state loop closed for the gateway; external model/tool/worker stop still unproven. No T2 / cross-model claim.
 
 - **PR #4 defect patches (pre-merge):** (1) text-derived `RETRACT` / repudiation survives conflicting `structured_override` operation labels; (2) `start_project` validates paths and defers workspace `mkdir` until checkpoint approval — no FS write before approve; (3) session `generationAuthority` is set true on approve and false on proposal/reject/interrupt (checkpoint + session levels stay consistent); (4) approve/reject/dislike fail closed unless the checkpoint equals `currentCheckpointId`. Interrupt claim scoped honestly as **atomic SI session-state interruption** until product wiring proves model/tool/worker stop. Four regression tests added.
 
