@@ -6,6 +6,7 @@ Use this reference when Council work can read connected sources, modify local or
 
 - [Permission model](#permission-model)
 - [Action classes](#action-classes)
+- [PolicyGuard command allowlist (v1)](#policyguard-command-allowlist-v1)
 - [Approval evidence](#approval-evidence)
 - [Project and data boundaries](#project-and-data-boundaries)
 - [Budget Lock](#budget-lock)
@@ -59,6 +60,12 @@ Keep at least these actions separate:
 Connector read and connector write are different permissions. Repository read, local code modification, remote push, pull-request creation, merge, deployment, and settings changes are different permissions. Do not collapse them into “GitHub access” or an equivalent broad label.
 
 Objector and Aligner roles are read-only by default. A recommendation in their response is not permission to execute it.
+
+## PolicyGuard command allowlist (v1)
+
+`scripts/policy_guard.py` authorizes process execution against a **fixed, narrow** structured allowlist (read-only Git subcommands, Python `unittest` / version queries, and a few version probes). Wrappers, ambiguous resolution, shell/interpreter indirection, installs, deploys, and Git mutation fail closed before any adapter runs.
+
+That fixed set is deliberate for v1. When a valid new skill or lane needs an executable or command shape that is **absent** from the allowlist, PolicyGuard **denies** the action (`decision: DENY`, adapter not invoked). The lane does not gain authority by existing in `lanes/` or by being runnable in an unconstrained shell. Expand the allowlist only through an explicit, reviewed change that preserves fail-closed behavior — never by treating unknown commands as allowed.
 
 ## Approval evidence
 
