@@ -292,23 +292,6 @@
       "must": ["produce equivalent authoritative intent", "produce equivalent outcome", "require SI interrupt wiring on dislike in both clients"],
       "must_not": ["pass on valid JSON alone", "claim REVIEW_PASS or Platynum T2/Tier-4 from SI-only unit tests", "treat TradeScout profile seeding as reliability proof"],
       "notes": "Pass requires cross-client runs. Not claimed by this SI P0 PR."
-    },
-    {
-      "id": "selective-inheritance-luxury-showcase-reject-inventory-grammar",
-      "kind": "positive_trigger",
-      "prompt": "When the owner requests a luxury showcase and supplies an existing luxury-oriented website, inherit TradeScout Direct Connect and material IDs from a wholesaler implementation if useful, but reject that implementation's inventory-oriented presentation grammar.",
-      "must": [
-        "inherit platform capabilities such as Direct Connect, privacy, and material identity",
-        "inherit luxury voice and installed-interior story from the owner site when evidenced",
-        "reject inventory browser, filters, slab counts, warehouse/yard language, product cards, and View details grammar",
-        "keep materials separate when the owner names them separately"
-      ],
-      "must_not": [
-        "copy public phone, email, or testimonials from the owner site into the public profile",
-        "render wholesaler catalog chrome as the luxury showcase",
-        "combine distinct materials into Honey Green naming"
-      ],
-      "notes": "Linked TradeScout proof: luxury-material-house presentation and LuxuryMaterialHouseShowcase. See evals/regression/luxury-showcase-reject-inventory-grammar.md."
     }
   ]
 }
