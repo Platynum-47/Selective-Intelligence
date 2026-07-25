@@ -1,0 +1,7 @@
+evidence=d:\AAATraderCorner\TradeScout\Selective-Intelligence\artifacts\policy-guard-clean-clone\replay-20260723-233938.md
+clone=d:\AAATraderCorner\TradeScout\si-clean-clone-main-1744a48-20260723-233938
+sha=1744a48cb1aebb53a86d7bfee5be48e58dcb6b10
+policy_guard_exit=0
+policy_guard_ran=12
+full_suite_exit=0
+full_suite_ran=18
