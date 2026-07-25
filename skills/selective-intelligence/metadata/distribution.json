@@ -63,7 +63,6 @@
     "agents/openai.yaml",
     "scripts/prompt_queue.py",
     "evals/evals.json",
-    "evals/regression/luxury-showcase-reject-inventory-grammar.md",
     "evals/results-0.1.0.json",
     "evals/results-0.1.1.json",
     "evals/results-0.2.0.json",
