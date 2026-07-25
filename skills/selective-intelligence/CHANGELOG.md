@@ -4,6 +4,12 @@ All notable behavior changes to Selective Intelligence are recorded here.
 
 ## Unreleased
 
+- **Concept Rescue release-control closure:** Reviewed the current Step-1 and Concept Rescue runtime,
+  reference, regression, and test files into the portable manifest; made `lanes/` and `tests/`
+  valid declared release surfaces; ignored generated cache directories during release inventory;
+  and made the release symlink adversarial control degrade honestly when Windows cannot create its
+  fixture. Deterministic controls remain distinct from real-model or production proof.
+
 - **Text gate + approve intent-hash (Platynum↔SI complete wiring):** Approve requires current checkpoint id + intent hash (fail closed on stale). Non-Platynum clients use explicit `APPROVE` / `CORRECT: <instruction>` via `scripts/text_gate.py` and `build_engine text-gate` — same transactions as Platynum buttons; decorative Approve/Correct / emoji controls removed from skill/docs prompts. Platynum Correct → interrupt → RETRACT/REPLACE → new checkpoint → blocked until re-approve. External model/tool/worker stop still unproven. No ops 5–7 / T2 claim.
 
 - **Platynum PR #3 wiring noted:** product gateway now calls SI `interrupt` on Correct and SI `approve` on Continue/Approve (re-approval after revise). Session-state loop closed for the gateway; external model/tool/worker stop still unproven. No T2 / cross-model claim.

@@ -807,19 +807,26 @@ def control_tests(include_release: bool = True) -> list[str]:
             external_release.mkdir()
             (external_release / "outside.md").write_text("outside the skill root\n", encoding="utf-8")
             linked_release = copied / "references" / "linked-release"
-            linked_release.symlink_to(external_release, target_is_directory=True)
-            symlink_metadata_path = copied / "metadata" / "distribution.json"
-            symlink_metadata_baseline = symlink_metadata_path.read_text(encoding="utf-8")
-            symlink_metadata = json.loads(symlink_metadata_baseline)
-            symlink_metadata["release_files"].append("references/linked-release/outside.md")
-            symlink_metadata_path.write_text(json.dumps(symlink_metadata, indent=2) + "\n", encoding="utf-8")
-            symlink_result = run([sys.executable, release_script, "doctor", "--json"], {1})
-            symlink_errors = json.loads(symlink_result.stdout).get("errors", [])
-            if not any("symlink component is not allowed" in error for error in symlink_errors):
-                raise AssertionError("release manifest followed an intermediate symlink")
-            symlink_metadata_path.write_text(symlink_metadata_baseline, encoding="utf-8")
-            linked_release.unlink()
-            passed.append("release manifest rejects intermediate symlink traversal")
+            try:
+                linked_release.symlink_to(external_release, target_is_directory=True)
+            except OSError:
+                # Windows commonly blocks symlink creation without Developer Mode or
+                # elevated privilege. Keep the security control active wherever the
+                # platform can construct its adversarial fixture.
+                passed.append("release symlink rejection skipped (platform cannot create symlinks)")
+            else:
+                symlink_metadata_path = copied / "metadata" / "distribution.json"
+                symlink_metadata_baseline = symlink_metadata_path.read_text(encoding="utf-8")
+                symlink_metadata = json.loads(symlink_metadata_baseline)
+                symlink_metadata["release_files"].append("references/linked-release/outside.md")
+                symlink_metadata_path.write_text(json.dumps(symlink_metadata, indent=2) + "\n", encoding="utf-8")
+                symlink_result = run([sys.executable, release_script, "doctor", "--json"], {1})
+                symlink_errors = json.loads(symlink_result.stdout).get("errors", [])
+                if not any("symlink component is not allowed" in error for error in symlink_errors):
+                    raise AssertionError("release manifest followed an intermediate symlink")
+                symlink_metadata_path.write_text(symlink_metadata_baseline, encoding="utf-8")
+                linked_release.unlink()
+                passed.append("release manifest rejects intermediate symlink traversal")
 
             schema_path = copied / "schemas" / "start-pack.schema.json"
             schema_baseline = schema_path.read_text(encoding="utf-8")
