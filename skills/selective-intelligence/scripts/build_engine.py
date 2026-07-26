@@ -31,6 +31,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import capabilities as CAP  # noqa: E402
 import checkpoint as CP  # noqa: E402
+import intent_contract as IC  # noqa: E402
 import lane_session as LS  # noqa: E402
 from policy_guard import PolicyDenied, PolicyGuard, guarded_run, guarded_write_text  # noqa: E402
 
@@ -116,6 +117,7 @@ def make_worker_packet(*, session_id: str, task_id: str) -> dict[str, Any]:
         raise EngineError("task not found")
     if task["status"] not in {"ready", "repairing", "failed"}:
         raise EngineError(f"task is not available for worker handoff: {task['status']}")
+    validate_task_against_active_intent(task, session.get("activeIntent") or {})
     workspace = Path(session["workspace"]).resolve()
     verified_adapters = [
         {
@@ -249,12 +251,223 @@ def validate_plan(plan: dict[str, Any]) -> None:
             raise EngineError(f"plan task {task['key']} has unknown dependencies: {', '.join(unknown)}")
 
 
+_READ_ONLY_TASK_KINDS = {"analysis", "audit", "diagnosis", "discovery", "review", "validation"}
+_READ_ONLY_TASK_TAGS = _READ_ONLY_TASK_KINDS | {"read-only", "readonly"}
+_READ_ONLY_PRIMARY_ACTIONS = {
+    "analyze",
+    "audit",
+    "diagnose",
+    "discover",
+    "inspect",
+    "read",
+    "report",
+    "review",
+    "validate",
+    "verify",
+}
+_MUTATING_ACTIONS = {
+    "add",
+    "added",
+    "adding",
+    "apply",
+    "applied",
+    "applying",
+    "build",
+    "building",
+    "built",
+    "change",
+    "changed",
+    "changing",
+    "commercialize",
+    "commercialized",
+    "commercializing",
+    "commit",
+    "committed",
+    "committing",
+    "create",
+    "created",
+    "creating",
+    "delete",
+    "deleted",
+    "deleting",
+    "deploy",
+    "deployed",
+    "deploying",
+    "edit",
+    "edited",
+    "editing",
+    "fix",
+    "fixed",
+    "fixing",
+    "generate",
+    "generated",
+    "generating",
+    "implement",
+    "implemented",
+    "implementing",
+    "install",
+    "installed",
+    "installing",
+    "launch",
+    "launched",
+    "launching",
+    "made",
+    "make",
+    "making",
+    "modify",
+    "modified",
+    "modifying",
+    "mutate",
+    "mutated",
+    "mutating",
+    "publish",
+    "published",
+    "publishing",
+    "produce",
+    "produced",
+    "producing",
+    "push",
+    "pushed",
+    "pushing",
+    "remove",
+    "removed",
+    "removing",
+    "repair",
+    "repaired",
+    "repairing",
+    "scaffold",
+    "scaffolded",
+    "scaffolding",
+    "send",
+    "sending",
+    "sent",
+    "ship",
+    "shipped",
+    "shipping",
+    "turn",
+    "turned",
+    "turning",
+    "update",
+    "updated",
+    "updating",
+    "write",
+    "writing",
+    "written",
+    "wrote",
+    "design",
+    "designed",
+    "designing",
+}
+_NEGATION_WORDS = {"avoid", "avoiding", "never", "no", "not", "without"}
+
+
+def _contains_unnegated_mutating_action(value: str) -> bool:
+    tokens = re.sub(r"[^a-z0-9]+", " ", value.lower()).split()
+    for index, token in enumerate(tokens):
+        if token not in _MUTATING_ACTIONS:
+            continue
+        if not set(tokens[max(0, index - 3):index]) & _NEGATION_WORDS:
+            return True
+    return False
+
+
+def _task_is_genuinely_read_only(task: dict[str, Any]) -> bool:
+    metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+    kind = str(task.get("kind") or metadata.get("kind") or "worker").strip().lower()
+    tags = {str(tag).strip().lower() for tag in task.get("tags", []) if isinstance(tag, str)}
+    if kind not in _READ_ONLY_TASK_KINDS and not tags & _READ_ONLY_TASK_TAGS:
+        return False
+    action_source = str(task.get("operation") or task.get("title") or "")
+    action_tokens = re.sub(r"[^a-z0-9]+", " ", action_source.lower()).split()
+    primary_action = next(
+        (token for token in action_tokens if token not in {"a", "an", "please", "task", "the", "to"}),
+        "",
+    )
+    if primary_action not in _READ_ONLY_PRIMARY_ACTIONS:
+        return False
+    if any(_contains_unnegated_mutating_action(tag) for tag in tags):
+        return False
+    metadata_plan_key = str(metadata.get("planKey") or "")
+    for value in (
+        str(task.get("key") or metadata_plan_key),
+        str(task.get("title") or ""),
+        str(task.get("operation") or ""),
+    ):
+        if _contains_unnegated_mutating_action(value):
+            return False
+    return True
+
+
+def _task_contract_text(task: dict[str, Any]) -> list[str]:
+    metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+    values = [
+        task.get("key") or metadata.get("planKey"),
+        task.get("title"),
+        task.get("operation"),
+        *(task.get("tags") or []),
+    ]
+    return [str(value) for value in values if isinstance(value, str) and value.strip()]
+
+
+def _matches_intent_restriction(task: dict[str, Any], restriction: str) -> bool:
+    restriction_tokens = IC.concept_tokens([restriction])
+    if not restriction_tokens:
+        return False
+    task_values = _task_contract_text(task)
+    task_tokens = IC.concept_tokens(task_values)
+    overlap = task_tokens & restriction_tokens
+    required_overlap = 1 if len(restriction_tokens) == 1 else 2
+    if len(overlap) >= required_overlap:
+        return True
+    task_text = " ".join(re.sub(r"[^a-z0-9]+", " ", value.lower()).strip() for value in task_values)
+    restriction_text = re.sub(r"[^a-z0-9]+", " ", restriction.lower()).strip()
+    return bool(restriction_text and restriction_text in task_text)
+
+
+def _build_is_explicitly_unauthorized(active_intent: dict[str, Any]) -> bool:
+    return any(
+        re.search(r"\bbuild[\s_-]*authorized\s*(?:=|:|\bis\b)\s*false\b", str(value), re.I)
+        for value in active_intent.get("constraints", [])
+    )
+
+
+def validate_task_against_active_intent(
+    task: dict[str, Any],
+    active_intent: dict[str, Any],
+    *,
+    mutation_boundary: bool = False,
+) -> None:
+    """Fail closed on intent contradictions and unauthorized mutation."""
+    metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
+    task_key = task.get("key") or metadata.get("planKey") or task.get("taskId") or "unknown"
+    restrictions = [
+        *active_intent.get("prohibitions", []),
+        *active_intent.get("non_goals", []),
+        *active_intent.get("superseded_concepts", []),
+    ]
+    if any(
+        isinstance(restriction, str) and _matches_intent_restriction(task, restriction)
+        for restriction in restrictions
+    ):
+        raise EngineError(f"task {task_key} conflicts with the active intent contract")
+    if _build_is_explicitly_unauthorized(active_intent) and (
+        mutation_boundary or not _task_is_genuinely_read_only(task)
+    ):
+        raise EngineError(f"task {task_key} is not read-only while buildAuthorized=false")
+
+
+def validate_plan_against_active_intent(plan: dict[str, Any], active_intent: dict[str, Any]) -> None:
+    validate_plan(plan)
+    for task in plan["tasks"]:
+        validate_task_against_active_intent(task, active_intent)
+
+
 def add_plan_tasks(session: dict[str, Any], plan: dict[str, Any]) -> dict[str, str]:
     try:
         CP.require_authorized_checkpoint(session)
     except CP.CheckpointError as exc:
         raise EngineError(str(exc)) from exc
-    validate_plan(plan)
+    validate_plan_against_active_intent(plan, session.get("activeIntent") or {})
     existing = {
         task.get("metadata", {}).get("planKey"): task["taskId"]
         for task in session["queue"].values()
@@ -394,7 +607,7 @@ def start_project(
         structured_intent=structured_intent,
     )
     if plan is not None:
-        validate_plan(plan)
+        validate_plan_against_active_intent(plan, session.get("activeIntent") or {})
         session["pendingPlan"] = plan
     if auto_approve:
         checkpoint = CP.current_checkpoint(session)
@@ -420,6 +633,9 @@ def approve_project(
     checkpoint_id = checkpoint_id or session.get("currentCheckpointId")
     if not checkpoint_id:
         raise EngineError("no checkpoint to approve")
+    pending = plan if plan is not None else session.get("pendingPlan")
+    if pending is not None:
+        validate_plan_against_active_intent(pending, session.get("activeIntent") or {})
     try:
         CP.approve_checkpoint(
             session,
@@ -432,7 +648,6 @@ def approve_project(
     if workspace:
         Path(workspace).resolve().mkdir(parents=True, exist_ok=True)
     if plan is not None:
-        validate_plan(plan)
         session["pendingPlan"] = plan
     _apply_pending_plan(session)
     LS.save_session(session)
@@ -515,6 +730,27 @@ def interrupt_project(
         )
     except CP.CheckpointError as exc:
         raise EngineError(str(exc)) from exc
+    invalidated_pending = session.pop("pendingPlan", None)
+    invalidated_pending_summary = None
+    if invalidated_pending:
+        invalidated_pending_summary = {
+            "planId": invalidated_pending.get("planId"),
+            "taskKeys": [
+                task.get("key")
+                for task in invalidated_pending.get("tasks", [])
+                if isinstance(task, dict) and task.get("key")
+            ],
+        }
+        LS.record_event(
+            session,
+            "plan.invalidated_after_correction",
+            {
+                **invalidated_pending_summary,
+                "reason": "active intent changed; replacement plan requires post-correction validation",
+                "interruptedCheckpointId": result.get("interruptedCheckpointId"),
+            },
+        )
+    result["invalidatedPendingPlan"] = invalidated_pending_summary
     LS.save_session(session)
     return session, result
 
@@ -544,7 +780,7 @@ def correct_project(
         "preservedCompletedTaskIds": [],
     }
     if replacement_plan is not None:
-        validate_plan(replacement_plan)
+        validate_plan_against_active_intent(replacement_plan, session.get("activeIntent") or {})
         session["pendingPlan"] = replacement_plan
         LS.record_event(
             session,
@@ -587,6 +823,11 @@ def apply_worker_artifact(
         raise EngineError(str(exc)) from exc
     if task["status"] not in {"ready", "repairing"}:
         raise EngineError(f"task is not executable: {task['status']}")
+    validate_task_against_active_intent(
+        task,
+        session.get("activeIntent") or {},
+        mutation_boundary=True,
+    )
     ok, reason = LS.transition_task(session, task_id, "running")
     if not ok:
         raise EngineError(reason)
@@ -680,6 +921,11 @@ def verify_task(
         raise EngineError(str(exc)) from exc
     if task["status"] != "verifying":
         raise EngineError(f"task is not awaiting verification: {task['status']}")
+    validate_task_against_active_intent(
+        task,
+        session.get("activeIntent") or {},
+        mutation_boundary=True,
+    )
     workspace = Path(session["workspace"]).resolve()
     argv, cwd = _normalize_command(command, workspace)
     guard = _guard(session)
@@ -781,6 +1027,11 @@ def authorize_only(*, session_id: str, task_id: str, action: dict[str, Any]) -> 
         CP.assert_binding(session, session["queue"][task_id])
     except CP.CheckpointError as exc:
         raise EngineError(str(exc)) from exc
+    validate_task_against_active_intent(
+        session["queue"][task_id],
+        session.get("activeIntent") or {},
+        mutation_boundary=True,
+    )
     decision = _guard(session).authorize(session_id=session_id, task_id=task_id, action=action)
     decision = dict(decision)
     decision["authorized_checkpoint_id"] = session.get("authorizedCheckpointId")

@@ -34,6 +34,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import build_engine as BE
 import checkpoint as CP
+import lane_session as LS
 
 
 CASES = {
@@ -118,6 +119,19 @@ class ConceptRescueAdditionalCases(unittest.TestCase):
             self.assertEqual(proposed["status"], "proposed")
             stale_id = proposed["checkpoint_id"]
             stale_hash = proposed["intent_hash"]
+            stale_plan = session["pendingPlan"]
+            mislabeled_stale_plan = {
+                "planId": f"{case_key}-mislabeled-stale-build",
+                "tasks": [
+                    {
+                        "key": "mislabeled_rebuild",
+                        "title": "Generate improved public asset scaffold",
+                        "queue": "ready",
+                        "kind": "analysis",
+                        "tags": ["read-only"],
+                    }
+                ],
+            }
 
             session, result = BE.interrupt_project(
                 session_id=session["sessionId"],
@@ -142,12 +156,19 @@ class ConceptRescueAdditionalCases(unittest.TestCase):
             )
             self.assertEqual(result.get("operation"), "RETRACT")
             self.assertFalse(session.get("generationAuthority"))
+            self.assertNotIn("pendingPlan", session)
+            self.assertEqual(result["invalidatedPendingPlan"]["taskKeys"], ["rebuild_asset"])
 
             new_cp = result.get("newCheckpoint") or {}
             new_id = new_cp.get("checkpoint_id") or result.get("siCheckpointId")
             new_hash = new_cp.get("intent_hash") or result.get("newIntentHash")
             self.assertTrue(new_id)
             self.assertNotEqual(new_id, stale_id)
+            self.assertEqual(new_cp.get("intent_summary"), case["correction_product_intent"])
+            self.assertEqual(
+                (session.get("activeIntent") or {}).get("product_intent"),
+                case["correction_product_intent"],
+            )
 
             # Stale checkpoint must fail closed even after RETRACT produced a new one.
             with self.assertRaises((CP.CheckpointError, BE.EngineError)):
@@ -155,6 +176,14 @@ class ConceptRescueAdditionalCases(unittest.TestCase):
                     session_id=session["sessionId"],
                     checkpoint_id=stale_id,
                     intent_hash=stale_hash,
+                )
+
+            with self.assertRaises(BE.EngineError):
+                BE.approve_project(
+                    session_id=session["sessionId"],
+                    checkpoint_id=new_id,
+                    intent_hash=new_hash,
+                    plan=mislabeled_stale_plan,
                 )
 
             session = BE.approve_project(
@@ -170,8 +199,32 @@ class ConceptRescueAdditionalCases(unittest.TestCase):
             prohibitions = " ".join(intent.get("prohibitions") or []).lower()
             constraints = " ".join(intent.get("constraints") or []).lower()
             summary = (approved.get("intent_summary") or intent.get("product_intent") or "").lower()
-            blob = f"{prohibitions} {constraints} {summary}"
-            self.assertTrue("sales page" in blob or "third_party" in blob.replace("-", "_"))
+            self.assertEqual(intent.get("product_intent"), case["correction_product_intent"])
+            self.assertEqual(approved.get("intent_summary"), case["correction_product_intent"])
+            self.assertIn("do not build a sales page", prohibitions)
+            self.assertIn("buildauthorized=false", constraints.replace(" ", ""))
+            active_tasks = [
+                task
+                for task in session["queue"].values()
+                if task.get("status") not in {"cancelled", "complete", "invalidated"}
+            ]
+            self.assertEqual(active_tasks, [])
+
+            with self.assertRaises(BE.EngineError):
+                BE.add_plan_tasks(session, stale_plan)
+            with self.assertRaises(BE.EngineError):
+                BE.add_plan_tasks(session, mislabeled_stale_plan)
+            rogue = LS.add_task(
+                session,
+                title="Generate sales page scaffold",
+                queue="ready",
+                tags=["read-only"],
+                metadata={"kind": "analysis", "planKey": "rogue_rebuild_asset"},
+            )
+            LS.save_session(session)
+            with self.assertRaises(BE.EngineError) as dispatch_error:
+                BE.make_worker_packet(session_id=session["sessionId"], task_id=rogue["taskId"])
+            self.assertIn("active intent contract", str(dispatch_error.exception))
 
             # Status ceiling reference — the runtime does not claim past this.
             status = "Concept Rescue local flow-proven"
@@ -198,9 +251,9 @@ class ConceptRescueAdditionalCases(unittest.TestCase):
                     "tasks": [
                         {
                             "key": "analysis_only",
-                            "title": "Hold analysis only — no commercial build",
+                            "title": "Review ownership boundaries and validation evidence",
                             "queue": "ready",
-                            "kind": "worker",
+                            "kind": "analysis",
                         }
                     ]
                 },

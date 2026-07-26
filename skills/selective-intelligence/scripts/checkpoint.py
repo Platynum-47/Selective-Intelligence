@@ -67,13 +67,19 @@ def emit_checkpoint(
     if status not in CHECKPOINT_STATUSES:
         raise CheckpointError(f"invalid checkpoint status: {status}")
     intent = dict(active_intent or session.get("activeIntent") or {})
+    intent_summary = intent.get("product_intent") or ""
+    if not intent_summary:
+        if intent.get("lastOperation") in {"RETRACT", "ROLLBACK"}:
+            intent_summary = "No active product intent; replacement required."
+        else:
+            intent_summary = session.get("objective") or ""
     version = int(session.get("checkpointVersion", 0)) + 1
     checkpoint = {
         "schemaVersion": CHECKPOINT_SCHEMA,
         "checkpoint_id": _id("cp"),
         "session_id": session["sessionId"],
         "version": version,
-        "intent_summary": intent.get("product_intent") or session.get("objective") or "",
+        "intent_summary": intent_summary,
         "scope": list(intent.get("scope") or ([intent.get("product_intent")] if intent.get("product_intent") else [])),
         "non_goals": list(intent.get("non_goals") or intent.get("superseded_concepts") or []),
         "constraints": list(intent.get("constraints") or []),

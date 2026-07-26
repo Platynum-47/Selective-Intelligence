@@ -55,7 +55,10 @@ class IntentContractTests(unittest.TestCase):
             event = IC.classify_intent(
                 phrase,
                 event_type="correction",
-                structured_override={"operation": bad_op},
+                structured_override={
+                    "operation": bad_op,
+                    "product_intent": "Invent a replacement product request",
+                },
             )
             self.assertEqual(
                 event["operation"],
@@ -68,6 +71,7 @@ class IntentContractTests(unittest.TestCase):
     def test_retract_does_not_union_into_refinements(self):
         base = IC.classify_intent("Build the status panel and keep working.")
         active = IC.merge_active_contract(None, base)
+        prior_product_intent = active["product_intent"]
         # Simulate a bad prior interpretation that invented halt.
         active["process_directives"] = ["halt all work until freeze/resume"]
         active["intent_hash"] = IC.intent_hash(active)
@@ -79,6 +83,52 @@ class IntentContractTests(unittest.TestCase):
         refinements = merged.get("refinements") or []
         self.assertFalse(any("halt" in r.lower() or "nope" in r.lower() for r in refinements))
         self.assertTrue(merged.get("retractedInterpretations"))
+        self.assertEqual(merged.get("product_intent"), prior_product_intent)
+
+    def test_retract_with_validated_replacement_supersedes_product_intent(self):
+        base = IC.classify_intent(
+            "Create a better sales page.",
+            structured_override={"product_intent": "Create a better sales page"},
+        )
+        active = IC.merge_active_contract(None, base)
+        replacement = "Validate the unfinished proof of concept; do not build a sales page."
+        correction = IC.classify_intent(
+            "I did not ask you to own or commercialize this. Do not build another sales page.",
+            event_type="correction",
+            structured_override={
+                "operation": "RETRACT",
+                "operation_targets": ["sales page"],
+                "product_intent": replacement,
+                "constraints": ["buildAuthorized=false"],
+                "prohibitions": ["do not build a sales page"],
+            },
+        )
+        merged = IC.merge_active_contract(active, correction)
+        self.assertEqual(correction["operation"], "RETRACT")
+        self.assertEqual(correction["product_intent"], replacement)
+        self.assertEqual(merged["product_intent"], replacement)
+        self.assertEqual(
+            merged["lastOperationDiff"]["changed"]["product_intent"],
+            {"from": "Create a better sales page", "to": replacement},
+        )
+
+    def test_retract_without_replacement_clears_matching_product_intent(self):
+        base = IC.classify_intent(
+            "Create a better sales page.",
+            structured_override={"product_intent": "Create a better sales page"},
+        )
+        active = IC.merge_active_contract(None, base)
+        correction = IC.classify_intent(
+            "I did not ask for a sales page.",
+            event_type="correction",
+            structured_override={"operation": "RETRACT", "operation_targets": ["sales page"]},
+        )
+        merged = IC.merge_active_contract(active, correction)
+        self.assertEqual(merged["product_intent"], "")
+        self.assertEqual(
+            merged["lastOperationDiff"]["removed"]["product_intent"],
+            ["Create a better sales page"],
+        )
 
 
 class CapabilityTests(unittest.TestCase):

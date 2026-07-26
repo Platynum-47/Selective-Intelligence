@@ -19,6 +19,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import build_engine as BE
 import checkpoint as CP
+import lane_session as LS
 
 
 REQUIRED_INPUT = (
@@ -33,6 +34,11 @@ AMBIGUOUS = "Create a better version."
 CORRECTION = (
     "I do not own this. I am helping the creator, and I also want to test Platynum’s "
     "diagnosis workflow. Do not build another sales page."
+)
+
+CORRECTED_PRODUCT_INTENT = (
+    "Help the original creator validate an unfinished proof of concept; "
+    "prove Concept Rescue diagnosis; do not build another sales page."
 )
 
 
@@ -71,6 +77,31 @@ class ConceptRescueVertical(unittest.TestCase):
             self.assertEqual(proposed["status"], "proposed")
             stale_id = proposed["checkpoint_id"]
             stale_hash = proposed["intent_hash"]
+            stale_plan = session["pendingPlan"]
+            mislabeled_stale_plan = {
+                "planId": "mislabeled-stale-sales-page",
+                "tasks": [
+                    {
+                        "key": "mislabeled_sales_page",
+                        "title": "Generate sales page scaffold",
+                        "queue": "ready",
+                        "kind": "analysis",
+                        "tags": ["read-only"],
+                    }
+                ],
+            }
+            euphemistic_stale_plan = {
+                "planId": "mislabeled-euphemistic-build",
+                "tasks": [
+                    {
+                        "key": "launch_experience",
+                        "title": "Launch improved sales experience",
+                        "queue": "ready",
+                        "kind": "analysis",
+                        "tags": ["read-only"],
+                    }
+                ],
+            }
 
             session, result = BE.interrupt_project(
                 session_id=session["sessionId"],
@@ -78,10 +109,7 @@ class ConceptRescueVertical(unittest.TestCase):
                 disliked_checkpoint_id=stale_id,
                 structured_intent={
                     "operation": "RETRACT",
-                    "product_intent": (
-                        "Help the original creator validate an unfinished proof of concept; "
-                        "prove Concept Rescue diagnosis; do not build another sales page."
-                    ),
+                    "product_intent": CORRECTED_PRODUCT_INTENT,
                     "prohibitions": [
                         "do not build a sales page",
                         "do not commercialize third-party branding",
@@ -98,18 +126,34 @@ class ConceptRescueVertical(unittest.TestCase):
             )
             self.assertEqual(result.get("operation"), "RETRACT")
             self.assertFalse(session.get("generationAuthority"))
+            self.assertNotIn("pendingPlan", session)
+            self.assertEqual(result["invalidatedPendingPlan"]["taskKeys"], ["sales_page"])
 
             new_cp = result.get("newCheckpoint") or {}
             new_id = new_cp.get("checkpoint_id") or result.get("siCheckpointId")
             new_hash = new_cp.get("intent_hash") or result.get("newIntentHash")
             self.assertTrue(new_id)
             self.assertNotEqual(new_id, stale_id)
+            self.assertEqual(new_cp.get("intent_summary"), CORRECTED_PRODUCT_INTENT)
+            self.assertEqual(
+                (session.get("activeIntent") or {}).get("product_intent"),
+                CORRECTED_PRODUCT_INTENT,
+            )
 
             with self.assertRaises((CP.CheckpointError, BE.EngineError)):
                 BE.approve_project(
                     session_id=session["sessionId"],
                     checkpoint_id=stale_id,
                     intent_hash=stale_hash,
+                )
+
+            # A pre-correction plan cannot be resubmitted as if it were corrected.
+            with self.assertRaises(BE.EngineError):
+                BE.approve_project(
+                    session_id=session["sessionId"],
+                    checkpoint_id=new_id,
+                    intent_hash=new_hash,
+                    plan=mislabeled_stale_plan,
                 )
 
             session = BE.approve_project(
@@ -125,8 +169,81 @@ class ConceptRescueVertical(unittest.TestCase):
             prohibitions = " ".join(intent.get("prohibitions") or []).lower()
             constraints = " ".join(intent.get("constraints") or []).lower()
             summary = (approved.get("intent_summary") or intent.get("product_intent") or "").lower()
-            blob = f"{prohibitions} {constraints} {summary}"
-            self.assertTrue("sales page" in blob or "third_party" in blob.replace("-", "_"))
+            self.assertEqual(intent.get("product_intent"), CORRECTED_PRODUCT_INTENT)
+            self.assertEqual(approved.get("intent_summary"), CORRECTED_PRODUCT_INTENT)
+            self.assertIn("do not build a sales page", prohibitions)
+            self.assertIn("buildauthorized=false", constraints.replace(" ", ""))
+            active_tasks = [
+                task
+                for task in session["queue"].values()
+                if task.get("status") not in {"cancelled", "complete", "invalidated"}
+            ]
+            self.assertEqual(active_tasks, [])
+
+            # Plan application and the final dispatch boundary both fail closed.
+            with self.assertRaises(BE.EngineError):
+                BE.add_plan_tasks(session, stale_plan)
+            with self.assertRaises(BE.EngineError):
+                BE.add_plan_tasks(session, mislabeled_stale_plan)
+            with self.assertRaises(BE.EngineError) as euphemistic_plan_error:
+                BE.add_plan_tasks(session, euphemistic_stale_plan)
+            self.assertIn("buildAuthorized=false", str(euphemistic_plan_error.exception))
+            rogue = LS.add_task(
+                session,
+                title="Generate sales page scaffold",
+                queue="ready",
+                tags=["read-only"],
+                metadata={"kind": "analysis", "planKey": "rogue_sales_page"},
+            )
+            LS.save_session(session)
+            with self.assertRaises(BE.EngineError) as dispatch_error:
+                BE.make_worker_packet(session_id=session["sessionId"], task_id=rogue["taskId"])
+            self.assertIn("active intent contract", str(dispatch_error.exception))
+            euphemistic_rogue = LS.add_task(
+                session,
+                title="Launch improved sales experience",
+                queue="ready",
+                tags=["read-only"],
+                metadata={"kind": "analysis", "planKey": "rogue_launch_experience"},
+            )
+            LS.save_session(session)
+            with self.assertRaises(BE.EngineError) as euphemistic_dispatch_error:
+                BE.make_worker_packet(
+                    session_id=session["sessionId"],
+                    task_id=euphemistic_rogue["taskId"],
+                )
+            self.assertIn("buildAuthorized=false", str(euphemistic_dispatch_error.exception))
+
+            # Read-only diagnosis may be dispatched, but its label cannot
+            # authorize a filesystem mutation while build remains prohibited.
+            analysis_task = LS.add_task(
+                session,
+                title="Review diagnostic evidence",
+                queue="ready",
+                tags=["read-only"],
+                metadata={"kind": "analysis", "planKey": "diagnostic_review"},
+            )
+            LS.save_session(session)
+            packet = BE.make_worker_packet(
+                session_id=session["sessionId"],
+                task_id=analysis_task["taskId"],
+            )
+            self.assertEqual(packet["taskId"], analysis_task["taskId"])
+            with self.assertRaises(BE.EngineError) as mutation_error:
+                BE.apply_worker_artifact(
+                    session_id=session["sessionId"],
+                    task_id=analysis_task["taskId"],
+                    artifact={
+                        "files": {"analysis.txt": "diagnostic evidence\n"},
+                        "producer": {
+                            "adapterId": "test-adapter",
+                            "surface": "unit-test",
+                            "generatedAt": "2026-07-25T00:00:00+00:00",
+                        },
+                    },
+                )
+            self.assertIn("buildAuthorized=false", str(mutation_error.exception))
+            self.assertFalse((workspace / "analysis.txt").exists())
 
             status = "Concept Rescue local flow-proven"
             self.assertNotIn("production proven", status)
@@ -145,9 +262,9 @@ class ConceptRescueVertical(unittest.TestCase):
                     "tasks": [
                         {
                             "key": "analysis_only",
-                            "title": "Hold analysis only — no commercial build",
+                            "title": "Review ownership boundaries and validation evidence",
                             "queue": "ready",
-                            "kind": "worker",
+                            "kind": "analysis",
                         }
                     ]
                 },
