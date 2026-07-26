@@ -403,7 +403,15 @@ def classify_intent(
             if key in {"operation", "operation_targets"}:
                 continue
             if key == "product_intent":
-                if value.strip() and not is_retract_like:
+                # Raw repudiation text is never promoted into a product ask.
+                # A validated reasoning adapter may carry an explicit
+                # replacement only when its declared operation agrees with the
+                # text-derived retract-like operation. A conflicting ADD /
+                # MODIFY override cannot smuggle a new product ask through a
+                # repudiation.
+                override_operation = str(structured_override.get("operation") or "").upper()
+                operation_agrees = not is_retract_like or override_operation == operation
+                if value.strip() and operation_agrees:
                     result[key] = value.strip()
             else:
                 result[key] = _dedupe(result.get(key, []) + value)
@@ -477,6 +485,20 @@ def merge_active_contract(active: dict[str, Any] | None, event: dict[str, Any]) 
     targets = list(event.get("operation_targets") or event.get("superseded_concepts") or [])
 
     if operation in {"RETRACT", "ROLLBACK"}:
+        prior_product_intent = str(active.get("product_intent") or "")
+        replacement_product_intent = str(event.get("product_intent") or "").strip()
+        if replacement_product_intent:
+            diff["changed"]["product_intent"] = {
+                "from": prior_product_intent,
+                "to": replacement_product_intent,
+            }
+            active["product_intent"] = replacement_product_intent
+        elif prior_product_intent:
+            retained_product, removed_product = _remove_matching([prior_product_intent], targets)
+            if removed_product:
+                diff["removed"]["product_intent"] = removed_product
+                diff["retained"]["product_intent"] = retained_product
+                active["product_intent"] = ""
         for key in (
             "process_directives",
             "constraints",
@@ -505,6 +527,8 @@ def merge_active_contract(active: dict[str, Any] | None, event: dict[str, Any]) 
                 "eventId": event["eventId"],
                 "rawText": event.get("rawText"),
                 "targets": targets,
+                "priorProductIntent": prior_product_intent,
+                "replacementProductIntent": replacement_product_intent or None,
                 "timestamp": _now(),
             }
         )

@@ -30,7 +30,17 @@ ALLOWED_TOP_LEVEL_FILES = {
     "CHANGELOG.md",
     "README.md",
 }
-ALLOWED_TOP_LEVEL_DIRS = {"agents", "evals", "metadata", "references", "schemas", "scripts", "subskills"}
+ALLOWED_TOP_LEVEL_DIRS = {
+    "agents",
+    "evals",
+    "lanes",
+    "metadata",
+    "references",
+    "schemas",
+    "scripts",
+    "subskills",
+    "tests",
+}
 FORBIDDEN_PARTS = {".git", "__pycache__", ".pytest_cache", ".mypy_cache", "dist"}
 FORBIDDEN_NAMES = {"events.jsonl", "lock.json", ".env", ".env.local", ".env.production"}
 SECRET_PATTERNS = (
@@ -147,7 +157,7 @@ def release_files(root: Path, metadata: dict[str, object]) -> tuple[list[Path], 
         if not path.is_file() and not path.is_symlink():
             continue
         relative = path.relative_to(root)
-        if any(part == ".git" for part in relative.parts):
+        if any(part in FORBIDDEN_PARTS for part in relative.parts):
             continue
         actual.add(relative.as_posix())
     for relative_text in sorted(actual - declared_set):

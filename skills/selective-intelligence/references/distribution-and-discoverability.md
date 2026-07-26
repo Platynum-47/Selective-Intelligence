@@ -33,10 +33,12 @@ selective-intelligence/
         ├── VERSION
         ├── agents/
         ├── evals/
+        ├── lanes/
         ├── metadata/
         ├── references/
         ├── schemas/
-        └── scripts/
+        ├── scripts/
+        └── tests/
 ```
 
 The repository's `skills/selective-intelligence/` directory is the canonical portable source. The purpose-built release archive projects that same directory as one top-level `selective-intelligence/` folder. Vendor it into `.agents/skills/selective-intelligence/` where clients support the cross-client convention, or use the client's documented skill path. Do not duplicate it under repository-root or client-specific skill directories: adapters may point to or install the canonical directory but may not fork its behavioral contract.
